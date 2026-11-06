@@ -1,0 +1,2025 @@
+# SPDX-License-Identifier: Apache-2.0
+# Herdr v0.9.5 sidebar modifications by KangUnMo, 2026.
+--- a/src/client/shell.rs
++++ b/src/client/shell.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use std::collections::{HashMap, HashSet, VecDeque};
+ 
+ mod actions;
+@@ -10,6 +12,7 @@
+ mod config;
+ mod context_menu;
+ mod copy_mode;
++mod divider_groups;
+ mod endpoint_agent_state;
+ mod endpoint_agents;
+ mod endpoint_navigation;
+--- a/src/client/shell/composition.rs
++++ b/src/client/shell/composition.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ 
+ fn restore_mode_bar(
+@@ -60,6 +62,7 @@
+             active_endpoint_id: &self.active_endpoint_id,
+             collapsed_endpoints: &self.collapsed_endpoints,
+             collapsed_groups: &self.collapsed_groups,
++            dividers: &self.dividers,
+             remote_collapsed_groups: &self.remote_collapsed_groups,
+             workspace_scroll: &mut self.workspace_scroll,
+             agent_scroll: &mut self.agent_scroll,
+@@ -195,6 +198,7 @@
+             _ => None,
+         };
+         let (dragged_workspace_id, workspace_drop_indicator_row) = match &self.chrome_drag {
++            Some(ClientChromeDrag::Divider { target, .. }) => (None, target.map(|(_, row)| row)),
+             Some(ClientChromeDrag::Workspace {
+                 source_workspace_id,
+                 target,
+@@ -216,6 +220,7 @@
+                 active_endpoint_id: &self.active_endpoint_id,
+                 collapsed_endpoints: &self.collapsed_endpoints,
+                 collapsed_groups: &self.collapsed_groups,
++                dividers: &self.dividers,
+                 remote_collapsed_groups: &self.remote_collapsed_groups,
+                 workspace_scroll: &mut self.workspace_scroll,
+                 agent_scroll: &mut self.agent_scroll,
+--- a/src/client/shell/config.rs
++++ b/src/client/shell/config.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ 
+ pub(super) fn merged_config_diagnostic(
+@@ -49,6 +51,7 @@
+             .collect::<Vec<_>>();
+         remote_collapsed_groups.sort_by(|left, right| left.profile_id.cmp(&right.profile_id));
+         let preferences = preferences::ClientChromePreferences {
++            dividers: self.dividers.clone(),
+             sidebar_width: self.sidebar_width_manual.then_some(self.sidebar_width),
+             sidebar_section_split: self
+                 .sidebar_section_split_manual
+--- a/src/client/shell/context_menu.rs
++++ b/src/client/shell/context_menu.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ 
+ impl ClientContextMenuOverlay {
+@@ -5,7 +7,12 @@
+         use ClientContextMenuAction as Action;
+ 
+         let item = |label, action| ClientContextMenuItem { label, action };
+-        match &self.target {
++        let mut items = match &self.target {
++            ClientContextMenuTarget::Divider { .. } => vec![
++                item("이름 변경", Action::Rename),
++                item("구분선 삭제", Action::Close),
++                item("구분선 편집 실행 취소", Action::UndoDivider),
++            ],
+             ClientContextMenuTarget::Workspace { is_git: false, .. } => {
+                 vec![item("Rename", Action::Rename), item("Close", Action::Close)]
+             }
+@@ -79,7 +86,14 @@
+                 ]);
+                 items
+             }
++        };
++        if matches!(&self.target, ClientContextMenuTarget::Workspace { .. }) {
++            items.extend([
++                item("Finder에서 폴더 열기", Action::OpenFolder),
++                item("폴더 경로 복사", Action::CopyFolderPath),
++            ]);
+         }
++        items
+     }
+ }
+ 
+@@ -192,6 +206,25 @@
+             return;
+         };
+         match menu.target {
++            ClientContextMenuTarget::Divider { index } => match action {
++                ClientContextMenuAction::Rename => {
++                    if let Some(divider) = self.dividers.get(index) {
++                        self.overlay = Some(ClientShellOverlay::Rename(ClientRenameOverlay {
++                            title: "구분선 이름 변경",
++                            input: TextEditor::new(&divider.title, false),
++                            target: ClientRenameTarget::Divider { index },
++                        }));
++                    }
++                }
++                ClientContextMenuAction::Close if index < self.dividers.len() => {
++                    let order = self.checkpoint_dividers();
++                    self.dividers.remove(index);
++                    self.assign_divider_members(&order);
++                    self.persist_chrome_preferences(outcome);
++                }
++                ClientContextMenuAction::UndoDivider => self.undo_divider_edit(outcome),
++                _ => {}
++            },
+             ClientContextMenuTarget::Workspace {
+                 workspace_id,
+                 close_group,
+@@ -229,6 +262,35 @@
+         use crate::input::KeybindAction;
+ 
+         match action {
++            ClientContextMenuAction::OpenFolder | ClientContextMenuAction::CopyFolderPath => {
++                let path = self
++                    .snapshot
++                    .as_deref()
++                    .and_then(|snapshot| {
++                        snapshot
++                            .workspaces
++                            .iter()
++                            .find(|workspace| workspace.workspace_id == workspace_id)
++                    })
++                    .map(|workspace| workspace.new_workspace_cwd.clone());
++                if let Some(path) = path.filter(|path| !path.is_empty()) {
++                    if action == ClientContextMenuAction::CopyFolderPath {
++                        outcome
++                            .actions
++                            .push(ClientShellAction::ClipboardWrite(path.into_bytes()));
++                    } else if self.active_endpoint_id.is_local() {
++                        outcome
++                            .actions
++                            .push(ClientShellAction::OpenLocalFolder(path.into()));
++                    } else {
++                        self.set_endpoint_error(
++                            "Finder로 열기는 이 맥의 로컬 스페이스에서만 사용할 수 있습니다.",
++                        );
++                    }
++                } else {
++                    self.set_endpoint_error("프로젝트 폴더 경로를 찾을 수 없습니다.");
++                }
++            }
+             ClientContextMenuAction::Rename => {
+                 let label = self
+                     .snapshot
+--- /dev/null
++++ b/src/client/shell/divider_groups.rs
+@@ -0,0 +1,244 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
++use super::*;
++
++pub(super) enum DividerRow {
++    Workspace(WorkspaceEntry, bool),
++    Divider { index: usize, count: usize },
++}
++
++// 숫자 이동용 전체 순서와 접힌 항목을 제외한 화면 순서를 같은 자료에서 만듭니다.
++pub(super) fn rows(
++    snapshot: &ClientShellSnapshot,
++    entries: &[WorkspaceEntry],
++    dividers: &[SidebarDivider],
++    show_collapsed: bool,
++) -> Vec<DividerRow> {
++    if dividers.is_empty() {
++        return entries
++            .iter()
++            .map(|entry| DividerRow::Workspace(*entry, false))
++            .collect();
++    }
++    let mut order: Vec<usize> = (0..dividers.len()).collect();
++    order.sort_by_key(|index| dividers[*index].position);
++    let mut owners = HashMap::<&str, usize>::new();
++    for &index in &order {
++        if let Some(members) = &dividers[index].members {
++            for member in members {
++                owners.entry(member).or_insert(index);
++            }
++        }
++    }
++    let mut groups = vec![Vec::new(); dividers.len()];
++    let mut ungrouped = Vec::new();
++    let mut parent_owners = HashMap::new();
++    for (position, entry) in entries.iter().enumerate() {
++        let workspace = &snapshot.workspaces[entry.index];
++        let mut owner = owners.get(workspace.workspace_id.as_str()).copied();
++        if owner.is_none() {
++            owner = order.iter().rev().copied().find(|index| {
++                dividers[*index].members.is_none() && dividers[*index].position <= position
++            });
++        }
++        if let Some(worktree) = &workspace.worktree {
++            if !entry.indented {
++                parent_owners.insert(worktree.key.as_str(), owner);
++            } else if let Some(parent) = parent_owners.get(worktree.key.as_str()) {
++                owner = *parent;
++            }
++        }
++        if let Some(index) = owner {
++            groups[index].push(*entry);
++        } else {
++            ungrouped.push(DividerRow::Workspace(*entry, false));
++        }
++    }
++    let mut result = ungrouped;
++    for index in order {
++        result.push(DividerRow::Divider {
++            index,
++            count: groups[index].len(),
++        });
++        if show_collapsed || !dividers[index].collapsed {
++            result.extend(
++                groups[index]
++                    .iter()
++                    .map(|entry| DividerRow::Workspace(*entry, true)),
++            );
++        }
++    }
++    result
++}
++
++impl ClientShellState {
++    fn divider_order(&self) -> Vec<String> {
++        self.snapshot
++            .as_deref()
++            .map(|snapshot| {
++                self.navigation_workspace_entries(snapshot)
++                    .iter()
++                    .map(|entry| snapshot.workspaces[entry.index].workspace_id.clone())
++                    .collect()
++            })
++            .unwrap_or_default()
++    }
++
++    // 행 위치를 소속 ID로 한 번 확정합니다. 이후 목록 변경으로 소속이 밀리지 않습니다.
++    pub(super) fn assign_divider_members(&mut self, order: &[String]) {
++        self.dividers.sort_by_key(|divider| divider.position);
++        for index in 0..self.dividers.len() {
++            let start = self.dividers[index].position.min(order.len());
++            let end = self
++                .dividers
++                .get(index + 1)
++                .map_or(order.len(), |divider| divider.position.min(order.len()));
++            self.dividers[index].members = Some(order[start..end.max(start)].to_vec());
++        }
++    }
++
++    pub(super) fn sync_divider_positions(&mut self) {
++        let Some(snapshot) = self.snapshot.as_deref() else {
++            return;
++        };
++        let entries = render::workspace_entries(snapshot, &self.collapsed_groups);
++        let mut position = 0;
++        for row in rows(snapshot, &entries, &self.dividers, true) {
++            match row {
++                DividerRow::Workspace(..) => position += 1,
++                DividerRow::Divider { index, .. } => self.dividers[index].position = position,
++            }
++        }
++    }
++
++    pub(super) fn checkpoint_dividers(&mut self) -> Vec<String> {
++        let order = self.divider_order();
++        if self
++            .dividers
++            .iter()
++            .any(|divider| divider.members.is_none())
++        {
++            self.assign_divider_members(&order);
++        }
++        self.sync_divider_positions();
++        if self.divider_undo.len() == 20 {
++            self.divider_undo.pop_front();
++        }
++        self.divider_undo.push_back(self.dividers.clone());
++        order
++    }
++
++    pub(super) fn move_workspace_divider(
++        &mut self,
++        workspace_id: &str,
++        row: u16,
++        outcome: &mut ClientShellInput,
++    ) {
++        if !self.active_endpoint_id.is_local() || self.hits.divider_rows.is_empty() {
++            return;
++        }
++        let target = self
++            .hits
++            .divider_rows
++            .iter()
++            .map(|(rect, index)| (rect.y, Some(*index)))
++            .chain(self.hits.workspaces.iter().map(|hit| {
++                (
++                    hit.rect.y,
++                    self.dividers.iter().position(|divider| {
++                        divider
++                            .members
++                            .as_ref()
++                            .is_some_and(|members| members.contains(&hit.workspace_id))
++                    }),
++                )
++            }))
++            .filter(|(y, _)| *y <= row)
++            .max_by_key(|(y, _)| *y)
++            .and_then(|(_, owner)| owner);
++        let current = self.dividers.iter().position(|divider| {
++            divider
++                .members
++                .as_ref()
++                .is_some_and(|members| members.iter().any(|id| id == workspace_id))
++        });
++        if current == target {
++            return;
++        }
++        let Some(snapshot) = self.snapshot.as_deref() else {
++            return;
++        };
++        let Some(workspace) = snapshot
++            .workspaces
++            .iter()
++            .find(|workspace| workspace.workspace_id == workspace_id)
++        else {
++            return;
++        };
++        let ids = snapshot
++            .workspaces
++            .iter()
++            .filter(|candidate| {
++                candidate.workspace_id == workspace_id
++                    || workspace.worktree.as_ref().is_some_and(|worktree| {
++                        candidate
++                            .worktree
++                            .as_ref()
++                            .is_some_and(|other| worktree.key == other.key)
++                    })
++            })
++            .map(|workspace| workspace.workspace_id.clone())
++            .collect::<Vec<_>>();
++        self.checkpoint_dividers();
++        for divider in &mut self.dividers {
++            if let Some(members) = &mut divider.members {
++                members.retain(|id| !ids.contains(id));
++            }
++        }
++        if let Some(target) = target.and_then(|index| self.dividers.get_mut(index)) {
++            target.members.get_or_insert_default().extend(ids);
++            target.collapsed = false;
++        }
++        self.sync_divider_positions();
++        self.persist_chrome_preferences(outcome);
++    }
++
++    pub(super) fn undo_divider_edit(&mut self, outcome: &mut ClientShellInput) {
++        if let Some(previous) = self.divider_undo.pop_back() {
++            self.dividers = previous;
++            self.sync_divider_positions();
++            self.persist_chrome_preferences(outcome);
++            self.reveal_focused_workspace = true;
++            outcome.repaint = true;
++        }
++    }
++
++    pub(super) fn toggle_divider(&mut self, index: usize, outcome: &mut ClientShellInput) {
++        if let Some(divider) = self.dividers.get_mut(index) {
++            divider.collapsed = !divider.collapsed;
++            self.persist_chrome_preferences(outcome);
++            outcome.repaint = true;
++        }
++    }
++
++    pub(super) fn expand_divider_for(&mut self, workspace_id: &str) {
++        if !self.active_endpoint_id.is_local() {
++            return;
++        }
++        let mut changed = false;
++        for divider in &mut self.dividers {
++            if divider.collapsed
++                && divider
++                    .members
++                    .as_ref()
++                    .is_some_and(|members| members.iter().any(|id| id == workspace_id))
++            {
++                divider.collapsed = false;
++                changed = true;
++            }
++        }
++        if changed {
++            self.persist_chrome_preferences(&mut ClientShellInput::default());
++        }
++    }
++}
+--- a/src/client/shell/global_menu.rs
++++ b/src/client/shell/global_menu.rs
+@@ -1,9 +1,12 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub(super) enum ClientGlobalMenuAction {
+     Binding(crate::input::KeybindAction),
+     WhatsNew,
++    UndoDivider,
+ }
+ 
+ pub(super) fn global_menu_attention(snapshot: &ClientShellSnapshot) -> bool {
+@@ -50,6 +53,7 @@
+         "detach",
+         ClientGlobalMenuAction::Binding(crate::input::KeybindAction::Detach),
+     ));
++    items.push(("구분선 복구", ClientGlobalMenuAction::UndoDivider));
+     items
+ }
+ 
+@@ -104,6 +108,7 @@
+                 self.record_binding(crate::input::KeybindMatch::Action(binding), outcome)
+             }
+             ClientGlobalMenuAction::WhatsNew => self.open_release_notes(),
++            ClientGlobalMenuAction::UndoDivider => self.undo_divider_edit(outcome),
+         }
+         outcome.repaint = true;
+     }
+--- a/src/client/shell/mouse.rs
++++ b/src/client/shell/mouse.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+ 
+@@ -508,6 +510,37 @@
+         Some(last_index + 1)
+     }
+ 
++    fn divider_drop_target_at(&self, point: (u16, u16)) -> Option<(usize, u16)> {
++        if !super::contains(self.hits.workspace_body, point) {
++            return None;
++        }
++        let snapshot = self.snapshot.as_deref()?;
++        let entries = self.navigation_workspace_entries(snapshot);
++        let mut slots = Vec::new();
++        for hit in &self.hits.workspaces {
++            if let Some(position) = entries
++                .iter()
++                .position(|entry| snapshot.workspaces[entry.index].workspace_id == hit.workspace_id)
++            {
++                slots.push((position, hit.rect.y));
++                slots.push((
++                    position + 1,
++                    hit.rect
++                        .bottom()
++                        .min(self.hits.workspace_body.bottom().saturating_sub(1)),
++                ));
++            }
++        }
++        for (rect, index) in &self.hits.divider_rows {
++            if let Some(divider) = self.dividers.get(*index) {
++                slots.push((divider.position.min(entries.len()), rect.y));
++            }
++        }
++        slots
++            .into_iter()
++            .min_by_key(|(_, row)| row.abs_diff(point.1))
++    }
++
+     fn workspace_drop_target_at(&self, point: (u16, u16)) -> Option<(Option<String>, u16)> {
+         if self.hits.workspace_body.height == 0
+             || point.1 < self.hits.workspace_body.y.saturating_sub(1)
+@@ -544,37 +577,48 @@
+             .collapsed_groups_for_endpoint(&self.active_endpoint_id)
+             .unwrap_or(&empty_collapsed_groups);
+         let entries = render::workspace_entries(snapshot, collapsed_groups);
+-        let last_hit = self
++        if self.active_endpoint_id.is_local() {
++            for (rect, index) in &self.hits.divider_rows {
++                let before = self
++                    .dividers
++                    .get(*index)
++                    .and_then(|divider| divider.members.as_ref())
++                    .and_then(|members| {
++                        entries.iter().find(|entry| {
++                            members.contains(&snapshot.workspaces[entry.index].workspace_id)
++                        })
++                    })
++                    .map(|entry| snapshot.workspaces[entry.index].workspace_id.clone());
++                slots.push((before, rect.y));
++            }
++        }
++        if let Some(last_hit) = self
+             .hits
+             .workspaces
+             .iter()
+             .rev()
+-            .find(|hit| hit.endpoint_id == self.active_endpoint_id)?;
+-        let last_position = entries.iter().position(|entry| {
+-            snapshot
+-                .workspaces
+-                .get(entry.index)
+-                .is_some_and(|workspace| workspace.workspace_id == last_hit.workspace_id)
+-        })?;
+-        let next = entries.get(last_position + 1);
+-        if !next.is_some_and(|entry| {
+-            entry.indented
+-                || last_hit.group_toggle.as_ref().is_some_and(|(_, key)| {
+-                    snapshot.workspaces[entry.index]
+-                        .worktree
+-                        .as_ref()
+-                        .is_some_and(|worktree| worktree.key == *key)
+-                })
+-        }) {
+-            let before = next.and_then(|entry| {
+-                snapshot
+-                    .workspaces
+-                    .get(entry.index)
+-                    .map(|workspace| workspace.workspace_id.clone())
+-            });
+-            let row = last_hit.rect.bottom();
+-            if row < self.hits.new_workspace.y {
+-                slots.push((before, row));
++            .find(|hit| hit.endpoint_id == self.active_endpoint_id)
++        {
++            if let Some(last_position) = entries.iter().position(|entry| {
++                snapshot.workspaces[entry.index].workspace_id == last_hit.workspace_id
++            }) {
++                let next = entries.get(last_position + 1);
++                if !next.is_some_and(|entry| {
++                    entry.indented
++                        || last_hit.group_toggle.as_ref().is_some_and(|(_, key)| {
++                            snapshot.workspaces[entry.index]
++                                .worktree
++                                .as_ref()
++                                .is_some_and(|worktree| worktree.key == *key)
++                        })
++                }) {
++                    let before =
++                        next.map(|entry| snapshot.workspaces[entry.index].workspace_id.clone());
++                    let row = last_hit.rect.bottom();
++                    if row < self.hits.new_workspace.y {
++                        slots.push((before, row));
++                    }
++                }
+             }
+         }
+         slots
+@@ -1022,6 +1066,16 @@
+         }
+         if mouse.kind == MouseEventKind::Drag(MouseButton::Left) {
+             match self.chrome_drag.as_ref() {
++                Some(ClientChromeDrag::Divider { .. }) => {
++                    let next = self.divider_drop_target_at(point);
++                    if let Some(ClientChromeDrag::Divider { target, .. }) =
++                        self.chrome_drag.as_mut()
++                    {
++                        *target = next;
++                    }
++                    outcome.repaint = true;
++                    return;
++                }
+                 Some(ClientChromeDrag::SidebarWidth) => {
+                     self.set_sidebar_width_from_column(mouse.column, outcome);
+                     return;
+@@ -1260,6 +1314,29 @@
+                 self.workspace_press = None;
+                 self.tab_press = None;
+                 match drag {
++                    ClientChromeDrag::Divider { index, target } => {
++                        // 마우스를 놓은 실제 위치를 검사하고 목록 밖의 드롭은 취소합니다.
++                        if target.is_some() {
++                            if let Some((position, _)) = self.divider_drop_target_at(point) {
++                                if index < self.dividers.len()
++                                    && self.dividers[index].position != position
++                                {
++                                    let order = self.checkpoint_dividers();
++                                    self.dividers[index].position = position;
++                                    self.assign_divider_members(&order);
++                                    self.persist_chrome_preferences(outcome);
++                                }
++                            }
++                        } else if self
++                            .hits
++                            .divider_rows
++                            .iter()
++                            .any(|(rect, target)| *target == index && super::contains(*rect, point))
++                        {
++                            self.toggle_divider(index, outcome);
++                        }
++                        outcome.repaint = true;
++                    }
+                     ClientChromeDrag::Tab {
+                         tab_id,
+                         workspace_id,
+@@ -1295,9 +1372,11 @@
+                     }
+                     ClientChromeDrag::Workspace {
+                         source_workspace_id,
+-                        target,
++                        ..
+                     } => {
+-                        if let Some((before_workspace_id, _)) = target {
++                        if let Some((before_workspace_id, _)) = self.workspace_drop_target_at(point)
++                        {
++                            self.move_workspace_divider(&source_workspace_id, point.1, outcome);
+                             if let Some(method) = self.workspace_move_method(
+                                 &source_workspace_id,
+                                 before_workspace_id.as_deref(),
+@@ -1835,6 +1914,22 @@
+                 if !self.config.mouse_capture {
+                     return;
+                 }
++                if let Some((_, index)) = self
++                    .hits
++                    .divider_rows
++                    .iter()
++                    .find(|(rect, _)| super::contains(*rect, point))
++                {
++                    self.overlay =
++                        Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
++                            target: ClientContextMenuTarget::Divider { index: *index },
++                            x: mouse.column,
++                            y: mouse.row,
++                            highlighted: 0,
++                        }));
++                    outcome.repaint = true;
++                    return;
++                }
+                 let workspace_id = (!self.sidebar_collapsed)
+                     .then(|| self.active_endpoint_workspace_at(point))
+                     .flatten();
+@@ -2043,6 +2138,23 @@
+                 }
+                 if super::contains(self.hits.global_launcher, point) {
+                     self.toggle_global_menu();
++                    outcome.repaint = true;
++                    return;
++                }
++                if let Some((_, index)) = self
++                    .hits
++                    .divider_rows
++                    .iter()
++                    .find(|(rect, _)| super::contains(*rect, point))
++                {
++                    self.chrome_drag = Some(ClientChromeDrag::Divider {
++                        index: *index,
++                        target: None,
++                    });
++                    return;
++                }
++                if super::contains(self.hits.new_divider, point) {
++                    self.open_new_divider_overlay();
+                     outcome.repaint = true;
+                     return;
+                 }
+--- a/src/client/shell/overlay_input.rs
++++ b/src/client/shell/overlay_input.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ 
+ impl ClientShellState {
+@@ -328,6 +330,27 @@
+                     .as_deref()
+                     .and_then(|snapshot| snapshot.focused_workspace_id.clone())
+             })
++    }
++
++    pub(super) fn open_new_divider_overlay(&mut self) {
++        if self.dividers.len() >= 32 {
++            return;
++        }
++        let position = self
++            .snapshot
++            .as_deref()
++            .map(|snapshot| {
++                self.navigation_workspace_entries(snapshot)
++                    .iter()
++                    .position(|entry| snapshot.workspaces[entry.index].focused)
++                    .map_or(0, |index| index + 1)
++            })
++            .unwrap_or(0);
++        self.overlay = Some(ClientShellOverlay::Rename(ClientRenameOverlay {
++            title: "구분선 제목",
++            input: TextEditor::new("", false),
++            target: ClientRenameTarget::NewDivider { position },
++        }));
+     }
+ 
+     pub(super) fn open_new_workspace_overlay(&mut self) {
+@@ -936,6 +959,40 @@
+         };
+         let trimmed = rename.input.trim();
+         let method = match rename.target {
++            ClientRenameTarget::Divider { index } => {
++                let title: String = trimmed
++                    .chars()
++                    .filter(|ch| !ch.is_control())
++                    .take(60)
++                    .collect();
++                if !title.is_empty() && index < self.dividers.len() {
++                    self.checkpoint_dividers();
++                    if let Some(divider) = self.dividers.get_mut(index) {
++                        divider.title = title;
++                        self.persist_chrome_preferences(outcome);
++                    }
++                }
++                None
++            }
++            ClientRenameTarget::NewDivider { position } => {
++                let title: String = trimmed
++                    .chars()
++                    .filter(|ch| !ch.is_control())
++                    .take(60)
++                    .collect();
++                if !title.is_empty() && self.dividers.len() < 32 {
++                    let order = self.checkpoint_dividers();
++                    self.dividers.push(SidebarDivider {
++                        position,
++                        title,
++                        ..Default::default()
++                    });
++                    self.assign_divider_members(&order);
++                    self.persist_chrome_preferences(outcome);
++                    self.reveal_focused_workspace = false;
++                }
++                None
++            }
+             ClientRenameTarget::NewWorkspace {
+                 source_workspace_id,
+                 cwd,
+--- a/src/client/shell/preferences.rs
++++ b/src/client/shell/preferences.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use std::{
+     path::{Path, PathBuf},
+     sync::atomic::{AtomicU64, Ordering},
+@@ -16,6 +18,12 @@
+ 
+ #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+ pub(super) struct ClientChromePreferences {
++    #[serde(
++        default,
++        skip_serializing_if = "Vec::is_empty",
++        deserialize_with = "deserialize_dividers"
++    )]
++    pub(super) dividers: Vec<super::SidebarDivider>,
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+     pub(super) sidebar_width: Option<u16>,
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+@@ -28,6 +36,35 @@
+     pub(super) collapsed_groups: Vec<String>,
+     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+     pub(super) remote_collapsed_groups: Vec<ClientRemoteCollapsedGroups>,
++}
++
++// 손상된 구분선 항목이 기존 너비·정렬 설정까지 무효화하지 않도록 분리합니다.
++fn deserialize_dividers<'de, D>(deserializer: D) -> Result<Vec<super::SidebarDivider>, D::Error>
++where
++    D: serde::Deserializer<'de>,
++{
++    let value = serde_json::Value::deserialize(deserializer)?;
++    let Some(items) = value.as_array() else {
++        return Ok(Vec::new());
++    };
++    let mut dividers = items
++        .iter()
++        .filter_map(|item| {
++            let mut divider: super::SidebarDivider = serde_json::from_value(item.clone()).ok()?;
++            divider.title = divider
++                .title
++                .chars()
++                .filter(|ch| !ch.is_control())
++                .take(60)
++                .collect::<String>()
++                .trim()
++                .to_owned();
++            (!divider.title.is_empty()).then_some(divider)
++        })
++        .take(32)
++        .collect::<Vec<_>>();
++    dividers.sort_by_key(|divider| divider.position);
++    Ok(dividers)
+ }
+ 
+ pub(super) fn path_for_local_endpoint(socket_path: &Path) -> PathBuf {
+--- a/src/client/shell/render.rs
++++ b/src/client/shell/render.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ 
+ #[path = "../shell/overlays.rs"]
+@@ -236,6 +238,7 @@
+     pub(super) collapsed_endpoints: &'a HashSet<ClientEndpointId>,
+     pub(super) collapsed_groups: &'a HashSet<String>,
+     pub(super) remote_collapsed_groups: &'a HashMap<ClientEndpointId, HashSet<String>>,
++    pub(super) dividers: &'a [SidebarDivider],
+     pub(super) workspace_scroll: &'a mut usize,
+     pub(super) agent_scroll: &'a mut usize,
+     pub(super) tab_scroll: &'a mut usize,
+--- a/src/client/shell/sidebar.rs
++++ b/src/client/shell/sidebar.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ use ratatui::{
+     text::Line,
+@@ -195,6 +197,8 @@
+         },
+     );
+ }
++
++use super::divider_groups::DividerRow as SidebarEntry;
+ 
+ pub(crate) fn render_sidebar(
+     buffer: &mut Buffer,
+@@ -226,7 +230,8 @@
+             .add_modifier(Modifier::BOLD),
+     );
+ 
+-    let entries = workspace_entries(snapshot, state.collapsed_groups);
++    let workspace_entries = workspace_entries(snapshot, state.collapsed_groups);
++    let entries = divider_groups::rows(snapshot, &workspace_entries, state.dividers, false);
+     let body = Rect::new(
+         workspace_area.x,
+         workspace_area.y.saturating_add(WORKSPACE_HEADER_ROWS),
+@@ -238,7 +243,10 @@
+     hits.workspace_body = body;
+     let row_heights = entries
+         .iter()
+-        .map(|entry| {
++        .map(|row| {
++            let SidebarEntry::Workspace(entry, _) = row else {
++                return 2;
++            };
+             snapshot
+                 .workspaces
+                 .get(entry.index)
+@@ -260,9 +268,10 @@
+         .iter()
+         .enumerate()
+         .map(|(index, _)| {
+-            entries
+-                .get(index + 1)
+-                .map_or(0, |next| u16::from(!next.indented) * config.spaces.row_gap)
++            entries.get(index + 1).map_or(0, |next| {
++                u16::from(matches!(next, SidebarEntry::Workspace(entry, _) if !entry.indented))
++                    * config.spaces.row_gap
++            })
+         })
+         .collect::<Vec<_>>();
+     let mut metrics = super::scroll::list_scroll_metrics(
+@@ -274,7 +283,7 @@
+     if !body.is_empty() && std::mem::take(state.reveal_focused_workspace) {
+         if let Some(target) = entries
+             .iter()
+-            .position(|entry| snapshot.workspaces[entry.index].focused)
++            .position(|row| matches!(row, SidebarEntry::Workspace(entry, _) if snapshot.workspaces[entry.index].focused))
+         {
+             *state.workspace_scroll = super::scroll::list_scroll_start_to_reveal(
+                 &row_heights,
+@@ -299,7 +308,39 @@
+     let show_scrollbar = metrics.max_offset_from_bottom > 0 && body.width > 1;
+     let content_width = body.width.saturating_sub(u16::from(show_scrollbar));
+     let mut y = body.y;
+-    for (entry_position, entry) in entries.iter().enumerate().skip(*state.workspace_scroll) {
++    for (entry_position, row) in entries.iter().enumerate().skip(*state.workspace_scroll) {
++        if y >= body.bottom() {
++            break;
++        }
++        let (entry, grouped) = match row {
++            SidebarEntry::Workspace(entry, grouped) => (entry, *grouped),
++            SidebarEntry::Divider { index, count } => {
++                let divider = &state.dividers[*index];
++                let title = &divider.title;
++                let arrow = if divider.collapsed { "▶" } else { "▼" };
++                // 위 여백을 행 높이에 포함해 표시와 클릭 위치를 일치시킵니다.
++                if y.saturating_add(2) > body.bottom() {
++                    break;
++                }
++                hits.divider_rows
++                    .push((Rect::new(body.x, y + 1, content_width, 1), *index));
++                put_text(
++                    buffer,
++                    body.x,
++                    y + 1,
++                    content_width,
++                    &format!(
++                        "{arrow} {title} · {count} {}",
++                        "─".repeat(content_width as usize)
++                    ),
++                    Style::default()
++                        .fg(palette.accent)
++                        .add_modifier(Modifier::BOLD),
++                );
++                y = y.saturating_add(2 + gaps[entry_position]);
++                continue;
++            }
++        };
+         let Some(workspace) = snapshot.workspaces.get(entry.index) else {
+             continue;
+         };
+@@ -321,9 +362,11 @@
+         } else if workspace.focused {
+             buffer.set_style(rect, Style::default().bg(palette.active_row_bg));
+         }
++        let indent = if grouped { 2.min(rect.width) } else { 0 };
++        let content_rect = Rect::new(rect.x + indent, rect.y, rect.width - indent, rect.height);
+         render_workspace_rows(
+             buffer,
+-            rect,
++            content_rect,
+             status,
+             config.status_indicators,
+             entry,
+@@ -336,7 +379,7 @@
+         );
+         let group_toggle = render_parent_group_toggle(
+             buffer,
+-            rect,
++            content_rect,
+             snapshot,
+             entry.index,
+             state.collapsed_groups,
+@@ -349,9 +392,10 @@
+             indented: entry.indented,
+             group_toggle,
+         });
+-        let gap = entries
+-            .get(entry_position + 1)
+-            .map_or(0, |next| u16::from(!next.indented) * config.spaces.row_gap);
++        let gap = entries.get(entry_position + 1).map_or(0, |next| {
++            u16::from(matches!(next, SidebarEntry::Workspace(entry, _) if !entry.indented))
++                * config.spaces.row_gap
++        });
+         y = y.saturating_add(row_height + gap);
+     }
+ 
+@@ -391,6 +435,18 @@
+             " new",
+             Style::default().fg(palette.overlay0),
+         );
++        // 좁은 화면에서는 기존 new/menu 버튼의 클릭 영역을 보존합니다.
++        if workspace_area.width >= 18 {
++            hits.new_divider = Rect::new(workspace_area.x + 6, footer_y, 5, 1);
++            put_text(
++                buffer,
++                hits.new_divider.x,
++                footer_y,
++                5,
++                " div",
++                Style::default().fg(palette.overlay0),
++            );
++        }
+         let attention = super::super::global_menu::global_menu_attention(snapshot);
+         let launcher_width = if attention { 8 } else { 6 }.min(workspace_area.width);
+         hits.global_launcher = Rect::new(
+--- a/src/client/shell/state.rs
++++ b/src/client/shell/state.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ 
+ pub(super) const MIN_TAB_WIDTH: u16 = 8;
+@@ -104,6 +106,8 @@
+     pub(super) sidebar_section_divider: Rect,
+     pub(super) sidebar_toggle: Rect,
+     pub(super) new_workspace: Rect,
++    pub(super) new_divider: Rect,
++    pub(super) divider_rows: Vec<(Rect, usize)>,
+     pub(super) new_tab: Rect,
+     pub(super) tab_scroll_left: Rect,
+     pub(super) tab_scroll_right: Rect,
+@@ -187,6 +191,10 @@
+ }
+ 
+ pub(super) enum ClientChromeDrag {
++    Divider {
++        index: usize,
++        target: Option<(usize, u16)>,
++    },
+     SidebarWidth,
+     SidebarSection,
+     WorkspaceScrollbar {
+@@ -248,6 +256,7 @@
+     },
+     ClipboardWrite(Vec<u8>),
+     OpenSafeWebUrl(String),
++    OpenLocalFolder(std::path::PathBuf),
+     ActivateEndpoint {
+         endpoint_id: ClientEndpointId,
+         target: Option<ClientEndpointFocusTarget>,
+@@ -295,6 +304,12 @@
+ 
+ #[derive(Debug)]
+ pub(super) enum ClientRenameTarget {
++    Divider {
++        index: usize,
++    },
++    NewDivider {
++        position: usize,
++    },
+     NewWorkspace {
+         source_workspace_id: Option<String>,
+         cwd: Option<String>,
+@@ -512,6 +527,9 @@
+ pub(super) enum ClientContextMenuAction {
+     Rename,
+     Close,
++    UndoDivider,
++    OpenFolder,
++    CopyFolderPath,
+     NewWorktree,
+     OpenWorktree,
+     RemoveWorktree,
+@@ -529,6 +547,9 @@
+ 
+ #[derive(Debug)]
+ pub(super) enum ClientContextMenuTarget {
++    Divider {
++        index: usize,
++    },
+     Workspace {
+         workspace_id: String,
+         is_git: bool,
+@@ -882,6 +903,8 @@
+     pub(super) tab_press: Option<ClientTabPress>,
+     pub(super) collapsed_groups: HashSet<String>,
+     pub(super) remote_collapsed_groups: HashMap<ClientEndpointId, HashSet<String>>,
++    pub(super) dividers: Vec<SidebarDivider>,
++    pub(super) divider_undo: VecDeque<Vec<SidebarDivider>>,
+     pub(super) workspace_scroll: usize,
+     pub(super) agent_scroll: usize,
+     pub(super) pending_agent_reveal: Option<(ClientEndpointId, String)>,
+@@ -985,6 +1008,16 @@
+     }
+ }
+ 
++#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
++pub(super) struct SidebarDivider {
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub(super) members: Option<Vec<String>>,
++    #[serde(default)]
++    pub(super) collapsed: bool,
++    pub(super) position: usize,
++    pub(super) title: String,
++}
++
+ #[derive(Clone, Copy)]
+ pub(super) struct WorkspaceEntry {
+     pub(super) index: usize,
+@@ -1056,6 +1089,8 @@
+             tab_press: None,
+             collapsed_groups: preferences.collapsed_groups.into_iter().collect(),
+             remote_collapsed_groups,
++            dividers: preferences.dividers,
++            divider_undo: VecDeque::new(),
+             workspace_scroll: 0,
+             agent_scroll: 0,
+             pending_agent_reveal: None,
+@@ -1188,7 +1223,7 @@
+         snapshot: &ClientShellSnapshot,
+     ) -> Vec<WorkspaceEntry> {
+         let empty_collapsed_groups = HashSet::new();
+-        if self.mobile_layout_active() {
++        let entries = if self.mobile_layout_active() {
+             render::workspace_entries(snapshot, &empty_collapsed_groups)
+         } else {
+             render::workspace_entries(
+@@ -1196,10 +1231,24 @@
+                 self.collapsed_groups_for_endpoint(&self.active_endpoint_id)
+                     .unwrap_or(&empty_collapsed_groups),
+             )
+-        }
++        };
++        if !self.active_endpoint_id.is_local() || self.endpoints.len() > 1 {
++            return entries;
++        }
++        divider_groups::rows(snapshot, &entries, &self.dividers, true)
++            .into_iter()
++            .filter_map(|row| {
++                if let divider_groups::DividerRow::Workspace(entry, _) = row {
++                    Some(entry)
++                } else {
++                    None
++                }
++            })
++            .collect()
+     }
+ 
+     pub(super) fn reveal_workspace(&mut self, workspace_id: &str) {
++        self.expand_divider_for(workspace_id);
+         if self
+             .hits
+             .workspaces
+@@ -1208,13 +1257,24 @@
+         {
+             return;
+         }
++        let custom_groups = self.active_endpoint_id.is_local()
++            && self.endpoints.len() <= 1
++            && !self.dividers.is_empty();
+         let target = self.snapshot.as_deref().and_then(|snapshot| {
+-            self.navigation_workspace_entries(snapshot)
+-                .iter()
+-                .position(|entry| snapshot.workspaces[entry.index].workspace_id == workspace_id)
++            if custom_groups {
++                let entries = render::workspace_entries(snapshot, &self.collapsed_groups);
++                divider_groups::rows(snapshot, &entries, &self.dividers, false).iter().position(|row|
++                    matches!(row, divider_groups::DividerRow::Workspace(entry, _) if snapshot.workspaces[entry.index].workspace_id == workspace_id))
++            } else {
++                self.navigation_workspace_entries(snapshot).iter().position(|entry| snapshot.workspaces[entry.index].workspace_id == workspace_id)
++            }
+         });
+         if let Some(target) = target {
+-            self.workspace_scroll = target.min(self.hits.workspace_max_scroll);
++            self.workspace_scroll = if custom_groups {
++                target
++            } else {
++                target.min(self.hits.workspace_max_scroll)
++            };
+         }
+     }
+ 
+@@ -1585,7 +1645,38 @@
+                 Some(_) => {}
+             }
+         }
++        let focused_space_changed = self
++            .snapshot
++            .as_ref()
++            .is_some_and(|old| old.focused_workspace_id != snapshot.focused_workspace_id);
+         self.snapshot = Some(snapshot);
++        if self.active_endpoint_id.is_local()
++            && self
++                .dividers
++                .iter()
++                .any(|divider| divider.members.is_none())
++        {
++            let order = self
++                .navigation_workspace_entries(self.snapshot.as_deref().unwrap())
++                .iter()
++                .map(|entry| {
++                    self.snapshot.as_deref().unwrap().workspaces[entry.index]
++                        .workspace_id
++                        .clone()
++                })
++                .collect::<Vec<_>>();
++            self.assign_divider_members(&order);
++            self.persist_chrome_preferences(&mut ClientShellInput::default());
++        }
++        if focused_space_changed && self.active_endpoint_id.is_local() {
++            if let Some(id) = self
++                .snapshot
++                .as_ref()
++                .and_then(|snapshot| snapshot.focused_workspace_id.clone())
++            {
++                self.expand_divider_for(&id);
++            }
++        }
+         self.reconcile_pending_workspace_highlight();
+         let pending_surface = self.pending_pane_surface.take();
+         if let Some(surface) = pending_surface {
+@@ -1855,7 +1946,7 @@
+     ///
+     /// Every assignment must go through this setter so a repeated identical
+     /// message gets a fresh deadline instead of inheriting the previous one.
+-    pub(super) fn set_endpoint_error(&mut self, message: impl Into<String>) {
++    pub(in crate::client) fn set_endpoint_error(&mut self, message: impl Into<String>) {
+         self.endpoint_error = Some(message.into());
+         self.endpoint_error_deadline = Some(
+             std::time::Instant::now() + std::time::Duration::from_secs(ENDPOINT_ERROR_TIMEOUT_SECS),
+--- a/src/client/shell/tests/chrome_context.rs
++++ b/src/client/shell/tests/chrome_context.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ 
+ #[test]
+@@ -527,3 +529,784 @@
+             if params.workspace_id == "ws_1" && !params.close_group
+     ));
+ }
++
++#[test]
++fn divider_mvp_creates_only_a_visual_row_and_preserves_number_navigation() {
++    let config: Config = toml::from_str("[keys]\nswitch_workspace = 'cmd+1..9'\n").unwrap();
++    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
++    let mut projected = snapshot();
++    let mut second = projected.workspaces[0].clone();
++    second.workspace_id = "ws_2".into();
++    second.label = "second".into();
++    second.focused = false;
++    projected.workspaces.push(second);
++    state.set_snapshot(Box::new(projected));
++    state.set_pane_surface(surface());
++    state.compose(120, 40).unwrap();
++    let button = state.hits.new_divider;
++    assert!(button.width > 0);
++    let open = state.handle_raw_events(vec![RawInputEvent::Mouse(MouseEvent {
++        kind: MouseEventKind::Down(MouseButton::Left),
++        column: button.x + 1,
++        row: button.y,
++        modifiers: KeyModifiers::empty(),
++    })]);
++    assert!(open.actions.is_empty());
++    assert!(matches!(
++        state.overlay,
++        Some(ClientShellOverlay::Rename(ClientRenameOverlay {
++            target: ClientRenameTarget::NewDivider { position: 1 },
++            ..
++        }))
++    ));
++    state.handle_input_bytes("업무".as_bytes());
++    let submit = state.handle_input_bytes(b"\r");
++    assert!(
++        submit.actions.is_empty(),
++        "구분선은 서버 API를 호출하지 않습니다."
++    );
++    assert_eq!(state.dividers.len(), 1);
++    let frame = state.compose(120, 40).unwrap();
++    // 전각 문자의 후속 셀을 건너뛰어 화면의 실제 문자열을 복원합니다.
++    let mut text = String::new();
++    for row in frame.cells.chunks(frame.width as usize) {
++        let mut skip = 0;
++        for cell in row {
++            if skip > 0 {
++                skip -= 1;
++                continue;
++            }
++            text.push_str(&cell.symbol);
++            skip = UnicodeWidthStr::width(cell.symbol.as_str()).saturating_sub(1);
++        }
++    }
++    assert_eq!(state.dividers[0].title, "업무");
++    assert!(text.contains("▼ 업무 · 1 "));
++    assert_eq!(state.hits.workspaces.len(), 2);
++    assert_eq!(state.snapshot.as_ref().unwrap().workspaces.len(), 2);
++    assert_eq!(state.snapshot.as_ref().unwrap().panes.len(), 1);
++    assert_eq!(
++        state
++            .navigation_workspace_entries(state.snapshot.as_ref().unwrap())
++            .len(),
++        2
++    );
++    // Command+2 must focus the second real workspace, skipping the divider.
++    let focus = state.handle_input_bytes(b"\x1b[50;9u");
++    let [ClientShellAction::Endpoint { request, .. }] = &focus.actions[..] else {
++        panic!("실제 스페이스 이동 필요");
++    };
++    assert!(
++        matches!(&request.method, crate::api::schema::Method::WorkspaceFocus(target) if target.workspace_id == "ws_2")
++    );
++    let first = &state.hits.workspaces[0];
++    let second = &state.hits.workspaces[1];
++    assert_eq!(second.rect.y, first.rect.bottom() + 2);
++    let (divider, _) = state.hits.divider_rows[0];
++    assert_eq!(divider.y, first.rect.bottom() + 1);
++    assert_eq!(divider.height, 1);
++    let margin = &frame.cells[(first.rect.bottom() * frame.width + divider.x) as usize..]
++        [..divider.width as usize];
++    assert!(
++        margin.iter().all(|cell| cell.symbol == " "),
++        "구분선 위는 한 줄 비웁니다."
++    );
++    // A divider remains at a visual slot when workspace order changes.
++    let mut reordered = state.snapshot.as_deref().unwrap().clone();
++    reordered.workspaces.swap(0, 1);
++    state.set_snapshot(Box::new(reordered));
++    state.compose(120, 40).unwrap();
++    assert_eq!(state.dividers[0].position, 1);
++    assert_eq!(state.hits.workspaces[0].workspace_id, "ws_1");
++    assert_eq!(
++        state.dividers[0].members.as_deref(),
++        Some(&["ws_2".to_owned()][..])
++    );
++}
++
++#[test]
++fn divider_mvp_rejects_empty_titles_and_cancel_and_fits_scroll_viewport() {
++    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
++    state.set_snapshot(Box::new(snapshot()));
++    state.set_pane_surface(surface());
++    state.open_new_divider_overlay();
++    assert!(state.handle_input_bytes(b"  \r").actions.is_empty());
++    assert!(state.dividers.is_empty());
++    state.open_new_divider_overlay();
++    state.handle_input_bytes(b"cancel");
++    state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
++        KeyCode::Esc,
++        KeyModifiers::empty(),
++    ))]);
++    assert!(state.overlay.is_none());
++    assert!(state.dividers.is_empty());
++    for _ in 0..35 {
++        state.open_new_divider_overlay();
++        state.handle_input_bytes(b"section\r");
++    }
++    assert_eq!(state.dividers.len(), 32);
++    let frame = state.compose(100, 20).unwrap();
++    assert_eq!(frame.cells.len(), 2000);
++    assert!(state.hits.workspace_max_scroll > 0);
++    assert!(state
++        .hits
++        .workspaces
++        .iter()
++        .all(|hit| hit.rect.bottom() <= state.hits.new_workspace.y));
++}
++
++fn divider_mvp_mouse(
++    state: &mut ClientShellState,
++    kind: MouseEventKind,
++    x: u16,
++    y: u16,
++) -> ClientShellInput {
++    state.handle_raw_events(vec![RawInputEvent::Mouse(MouseEvent {
++        kind,
++        column: x,
++        row: y,
++        modifiers: KeyModifiers::empty(),
++    })])
++}
++
++#[test]
++fn divider_mvp_drag_rename_delete_and_indent_are_client_only() {
++    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
++    let mut projected = snapshot();
++    for i in 2..=3 {
++        let mut workspace = projected.workspaces[0].clone();
++        workspace.workspace_id = format!("ws_{i}");
++        workspace.label = format!("space-{i}");
++        workspace.focused = false;
++        projected.workspaces.push(workspace);
++    }
++    state.set_snapshot(Box::new(projected));
++    state.set_pane_surface(surface());
++    state.dividers.push(SidebarDivider {
++        position: 1,
++        title: "Work".into(),
++        ..Default::default()
++    });
++    let frame = state.compose(120, 40).unwrap();
++    let first = state.hits.workspaces[0].rect;
++    let second = state.hits.workspaces[1].rect;
++    assert_ne!(
++        frame.cells[(first.y * frame.width + first.x + 1) as usize].symbol,
++        " "
++    );
++    assert_eq!(
++        frame.cells[(second.y * frame.width + second.x) as usize].symbol,
++        " "
++    );
++    assert_eq!(
++        frame.cells[(second.y * frame.width + second.x + 1) as usize].symbol,
++        " "
++    );
++    assert_ne!(
++        frame.cells[(second.y * frame.width + second.x + 3) as usize].symbol,
++        " "
++    );
++    let (divider, _) = state.hits.divider_rows[0];
++    assert!(divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Left),
++        divider.x + 3,
++        divider.y
++    )
++    .actions
++    .is_empty());
++    assert!(divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Drag(MouseButton::Left),
++        first.x + 3,
++        first.y
++    )
++    .actions
++    .is_empty());
++    assert!(divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Up(MouseButton::Left),
++        first.x + 3,
++        first.y
++    )
++    .actions
++    .is_empty());
++    assert_eq!(state.dividers[0].position, 0);
++    state.compose(120, 40).unwrap();
++    let (divider, _) = state.hits.divider_rows[0];
++    let open = divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Right),
++        divider.x + 3,
++        divider.y,
++    );
++    assert!(open.actions.is_empty());
++    assert!(matches!(
++        state.overlay,
++        Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
++            target: ClientContextMenuTarget::Divider { index: 0 },
++            ..
++        }))
++    ));
++    let mut outcome = ClientShellInput::default();
++    state.activate_context_menu_item(0, &mut outcome);
++    assert!(outcome.actions.is_empty());
++    state.handle_input_bytes(&[0x15]);
++    state.handle_input_bytes("수정 이름".as_bytes());
++    assert!(state.handle_input_bytes(b"\r").actions.is_empty());
++    assert_eq!(state.dividers[0].title, "수정 이름");
++    state.compose(120, 40).unwrap();
++    let (divider, _) = state.hits.divider_rows[0];
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Right),
++        divider.x + 3,
++        divider.y,
++    );
++    state.activate_context_menu_item(1, &mut outcome);
++    assert!(state.dividers.is_empty());
++    assert!(outcome.actions.is_empty());
++    assert_eq!(state.snapshot.as_ref().unwrap().workspaces.len(), 3);
++    assert_eq!(state.snapshot.as_ref().unwrap().panes.len(), 1);
++    let frame = state.compose(120, 40).unwrap();
++    let first = state.hits.workspaces[0].rect;
++    assert_ne!(
++        frame.cells[(first.y * frame.width + first.x + 1) as usize].symbol,
++        " "
++    );
++}
++
++#[test]
++fn divider_mvp_drop_outside_sidebar_cancels_and_empty_rename_keeps_title() {
++    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
++    state.set_snapshot(Box::new(snapshot()));
++    state.set_pane_surface(surface());
++    state.dividers.push(SidebarDivider {
++        position: 1,
++        title: "Keep".into(),
++        ..Default::default()
++    });
++    state.compose(120, 40).unwrap();
++    let (divider, _) = state.hits.divider_rows[0];
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Left),
++        divider.x + 3,
++        divider.y,
++    );
++    divider_mvp_mouse(&mut state, MouseEventKind::Drag(MouseButton::Left), 100, 10);
++    assert!(
++        divider_mvp_mouse(&mut state, MouseEventKind::Up(MouseButton::Left), 100, 10)
++            .actions
++            .is_empty()
++    );
++    assert_eq!(state.dividers[0].position, 1);
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Right),
++        divider.x + 3,
++        divider.y,
++    );
++    state.activate_context_menu_item(0, &mut ClientShellInput::default());
++    state.handle_input_bytes(&[0x15]);
++    state.handle_input_bytes(b" \r");
++    assert_eq!(state.dividers[0].title, "Keep");
++}
++
++#[test]
++fn divider_persistence_restores_all_edits_without_changing_other_preferences() {
++    let path = std::env::temp_dir().join(format!(
++        "herdr-divider-persistence-{}.json",
++        std::process::id()
++    ));
++    preferences::store(
++        &path,
++        preferences::ClientChromePreferences {
++            sidebar_width: Some(31),
++            ..Default::default()
++        },
++    )
++    .unwrap();
++    let config =
++        || ClientShellConfig::from_config(&Config::default()).with_preferences_path(path.clone());
++    let restore = || {
++        let mut state = ClientShellState::new(config());
++        state.set_snapshot(Box::new(snapshot()));
++        state.set_pane_surface(surface());
++        state
++    };
++    let mut state = restore();
++    state.open_new_divider_overlay();
++    assert!(state
++        .handle_input_bytes("업무\r".as_bytes())
++        .actions
++        .is_empty());
++    assert_eq!(restore().dividers, state.dividers);
++    state.overlay = Some(ClientShellOverlay::Rename(ClientRenameOverlay {
++        title: "구분선 이름 변경",
++        input: TextEditor::new("새 이름", false),
++        target: ClientRenameTarget::Divider { index: 0 },
++    }));
++    state.handle_input_bytes(b"\r");
++    assert_eq!(restore().dividers[0].title, "새 이름");
++    state.compose(120, 40).unwrap();
++    let (divider, _) = state.hits.divider_rows[0];
++    let first = state.hits.workspaces[0].rect;
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Left),
++        divider.x + 3,
++        divider.y,
++    );
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Drag(MouseButton::Left),
++        first.x + 3,
++        first.y,
++    );
++    assert!(divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Up(MouseButton::Left),
++        first.x + 3,
++        first.y
++    )
++    .actions
++    .is_empty());
++    assert_eq!(restore().dividers[0].position, 0);
++    state.open_new_divider_overlay();
++    state.handle_input_bytes("개인\r".as_bytes());
++    assert_eq!(
++        restore().dividers,
++        state.dividers,
++        "제목·위치와 같은 위치의 생성 순서를 복원합니다."
++    );
++    state.overlay = Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
++        target: ClientContextMenuTarget::Divider { index: 0 },
++        x: 0,
++        y: 0,
++        highlighted: 1,
++    }));
++    let mut outcome = ClientShellInput::default();
++    state.activate_context_menu_item(1, &mut outcome);
++    assert!(outcome.actions.is_empty());
++    assert_eq!(restore().dividers.len(), 1);
++    assert_eq!(restore().dividers[0].title, "개인");
++    assert_eq!(restore().sidebar_width, 31);
++    assert_eq!(preferences::load(&path).unwrap().sidebar_width, Some(31));
++    state.overlay = Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
++        target: ClientContextMenuTarget::Divider { index: 0 },
++        x: 0,
++        y: 0,
++        highlighted: 1,
++    }));
++    state.activate_context_menu_item(1, &mut outcome);
++    assert!(
++        restore().dividers.is_empty(),
++        "마지막 삭제 후에도 다시 나타나지 않습니다."
++    );
++    std::fs::remove_file(path).unwrap();
++}
++
++#[test]
++fn divider_persistence_handles_invalid_entries_and_storage_errors() {
++    let legacy: preferences::ClientChromePreferences =
++        serde_json::from_str(r#"{"sidebar_width":31}"#).unwrap();
++    assert!(legacy.dividers.is_empty());
++    for value in ["null", "42", r#""invalid""#] {
++        let restored: preferences::ClientChromePreferences =
++            serde_json::from_str(&format!(r#"{{"sidebar_width":31,"dividers":{value}}}"#)).unwrap();
++        assert!(restored.dividers.is_empty());
++        assert_eq!(restored.sidebar_width, Some(31));
++    }
++    let bad = serde_json::json!({"sidebar_width":31, "dividers":[
++        {"position":0,"title":"  업무\u{1b}  "}, {"position":-1,"title":"skip"},
++        {"position":0,"title":" "}, {"position":1}, false,
++        {"position":2,"title":"개인".repeat(100)}
++    ]});
++    let restored: preferences::ClientChromePreferences = serde_json::from_value(bad).unwrap();
++    assert_eq!(restored.sidebar_width, Some(31));
++    assert_eq!(restored.dividers.len(), 2);
++    assert_eq!(restored.dividers[0].title, "업무");
++    assert_eq!(restored.dividers[1].title.chars().count(), 60);
++    let many =
++        serde_json::json!({"dividers":vec![serde_json::json!({"position":0,"title":"valid"});40]});
++    let restored: preferences::ClientChromePreferences = serde_json::from_value(many).unwrap();
++    assert_eq!(restored.dividers.len(), 32);
++    let directory = std::env::temp_dir().join(format!(
++        "herdr-divider-write-failure-{}",
++        std::process::id()
++    ));
++    std::fs::create_dir_all(&directory).unwrap();
++    let config =
++        ClientShellConfig::from_config(&Config::default()).with_preferences_path(directory.clone());
++    let mut state = ClientShellState::new(config);
++    state.open_new_divider_overlay();
++    let outcome = state.handle_input_bytes(b"Keep in memory\r");
++    assert!(outcome.actions.is_empty());
++    assert!(state.endpoint_error.is_some());
++    assert_eq!(
++        state.dividers.len(),
++        1,
++        "저장 실패 시 화면의 구분선은 유지합니다."
++    );
++    std::fs::remove_dir(directory).unwrap();
++}
++
++fn divider_groups_state() -> ClientShellState {
++    let config: Config = toml::from_str("[keys]\nswitch_workspace = 'cmd+1..9'\n").unwrap();
++    let mut config = ClientShellConfig::from_config(&config);
++    // 이전 버전의 위치 기반 JSON과 같은 상태로 시작합니다.
++    config.preferences.dividers = vec![
++        SidebarDivider {
++            position: 0,
++            title: "Work".into(),
++            ..Default::default()
++        },
++        SidebarDivider {
++            position: 2,
++            title: "Personal".into(),
++            ..Default::default()
++        },
++    ];
++    let mut state = ClientShellState::new(config);
++    let mut projected = snapshot();
++    for i in 2..=3 {
++        let mut workspace = projected.workspaces[0].clone();
++        workspace.workspace_id = format!("ws_{i}");
++        workspace.label = format!("space-{i}");
++        workspace.focused = false;
++        projected.workspaces.push(workspace);
++    }
++    state.set_snapshot(Box::new(projected));
++    state.set_pane_surface(surface());
++    state
++}
++
++#[test]
++fn divider_groups_migrate_members_and_keep_them_when_spaces_change() {
++    let mut state = divider_groups_state();
++    let expected = state.dividers[0].members.clone();
++    assert_eq!(expected, Some(vec!["ws_1".into(), "ws_2".into()]));
++    let mut changed = state.snapshot.as_deref().unwrap().clone();
++    changed.workspaces.remove(0);
++    let mut new = changed.workspaces[0].clone();
++    new.workspace_id = "ws_new".into();
++    new.label = "new".into();
++    changed.workspaces.insert(0, new);
++    state.set_snapshot(Box::new(changed));
++    assert_eq!(state.dividers[0].members, expected);
++    assert_eq!(state.dividers[1].members.as_ref().unwrap(), &["ws_3"]);
++    state.compose(120, 40).unwrap();
++    let ids = state
++        .hits
++        .workspaces
++        .iter()
++        .map(|hit| hit.workspace_id.as_str())
++        .collect::<Vec<_>>();
++    assert_eq!(
++        ids,
++        ["ws_new", "ws_2", "ws_3"],
++        "새 공간은 미분류에 두고 기존 소속은 보존합니다."
++    );
++}
++
++#[test]
++fn divider_groups_collapse_click_and_numeric_jump_auto_expand_without_server_close() {
++    let mut state = divider_groups_state();
++    state.compose(120, 40).unwrap();
++    let (rect, _) = state.hits.divider_rows[0];
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Left),
++        rect.x + 3,
++        rect.y,
++    );
++    assert!(divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Up(MouseButton::Left),
++        rect.x + 3,
++        rect.y
++    )
++    .actions
++    .is_empty());
++    assert!(state.dividers[0].collapsed);
++    state.compose(120, 40).unwrap();
++    assert_eq!(state.hits.workspaces.len(), 1);
++    assert_eq!(state.hits.workspaces[0].workspace_id, "ws_3");
++    assert_eq!(
++        state
++            .navigation_workspace_entries(state.snapshot.as_ref().unwrap())
++            .len(),
++        3
++    );
++    let outcome = state.handle_input_bytes(b"\x1b[50;9u");
++    let [ClientShellAction::Endpoint { request, .. }] = &outcome.actions[..] else {
++        panic!("실제 공간으로 이동해야 합니다.");
++    };
++    assert!(
++        matches!(&request.method,crate::api::schema::Method::WorkspaceFocus(target) if target.workspace_id=="ws_2")
++    );
++    assert!(!state.dividers[0].collapsed);
++    state.compose(120, 40).unwrap();
++    assert_eq!(state.hits.workspaces.len(), 3);
++}
++
++#[test]
++fn divider_groups_undo_recovers_create_rename_drag_delete_and_caps_history() {
++    let mut state = divider_groups_state();
++    let original = state.dividers.clone();
++    let mut outcome = ClientShellInput::default();
++    state.overlay = Some(ClientShellOverlay::Rename(ClientRenameOverlay {
++        title: "구분선 이름 변경",
++        input: TextEditor::new("Changed", false),
++        target: ClientRenameTarget::Divider { index: 0 },
++    }));
++    state.handle_input_bytes(b"\r");
++    state.undo_divider_edit(&mut outcome);
++    assert_eq!(state.dividers, original);
++    state.open_new_divider_overlay();
++    state.handle_input_bytes(b"new\r");
++    state.undo_divider_edit(&mut outcome);
++    assert_eq!(state.dividers, original);
++    state.compose(120, 40).unwrap();
++    let (rect, _) = state.hits.divider_rows[1];
++    let first = state.hits.workspaces[0].rect;
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Left),
++        rect.x + 3,
++        rect.y,
++    );
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Drag(MouseButton::Left),
++        first.x + 3,
++        first.y,
++    );
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Up(MouseButton::Left),
++        first.x + 3,
++        first.y,
++    );
++    state.undo_divider_edit(&mut outcome);
++    assert_eq!(state.dividers, original);
++    state.overlay = Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
++        target: ClientContextMenuTarget::Divider { index: 0 },
++        x: 0,
++        y: 0,
++        highlighted: 1,
++    }));
++    state.activate_context_menu_item(1, &mut outcome);
++    state.undo_divider_edit(&mut outcome);
++    assert_eq!(state.dividers, original);
++    for _ in 0..25 {
++        state.checkpoint_dividers();
++    }
++    assert_eq!(state.divider_undo.len(), 20);
++    assert!(outcome.actions.is_empty());
++}
++
++#[test]
++fn workspace_folder_actions_are_distinct_from_divider_editing() {
++    let mut state = divider_groups_state();
++    let mut projected = state.snapshot.as_deref().unwrap().clone();
++    projected.workspaces[1].new_workspace_cwd = "/repo other/선택한 폴더".into();
++    state.set_snapshot(Box::new(projected));
++    state.open_workspace_context_menu("ws_2".into(), 1, 2);
++    let Some(ClientShellOverlay::ContextMenu(menu)) = state.overlay.as_ref() else {
++        panic!()
++    };
++    let items = menu.items();
++    let open = items
++        .iter()
++        .position(|item| item.action == ClientContextMenuAction::OpenFolder)
++        .unwrap();
++    let copy = items
++        .iter()
++        .position(|item| item.action == ClientContextMenuAction::CopyFolderPath)
++        .unwrap();
++    assert!(!items
++        .iter()
++        .any(|item| item.action == ClientContextMenuAction::UndoDivider));
++    let mut outcome = ClientShellInput::default();
++    state.activate_context_menu_item(open, &mut outcome);
++    assert!(
++        matches!(&outcome.actions[..],[ClientShellAction::OpenLocalFolder(path)] if path==std::path::Path::new("/repo other/선택한 폴더"))
++    );
++    state.open_workspace_context_menu("ws_2".into(), 1, 2);
++    outcome.actions.clear();
++    state.activate_context_menu_item(copy, &mut outcome);
++    assert!(
++        matches!(&outcome.actions[..],[ClientShellAction::ClipboardWrite(bytes)] if bytes=="/repo other/선택한 폴더".as_bytes())
++    );
++    let menu = ClientContextMenuOverlay {
++        target: ClientContextMenuTarget::Divider { index: 0 },
++        x: 0,
++        y: 0,
++        highlighted: 0,
++    };
++    assert!(!menu.items().iter().any(|item| matches!(
++        item.action,
++        ClientContextMenuAction::OpenFolder | ClientContextMenuAction::CopyFolderPath
++    )));
++    assert!(menu
++        .items()
++        .iter()
++        .any(|item| item.action == ClientContextMenuAction::UndoDivider));
++    state.open_workspace_context_menu("ws_2".into(), 1, 2);
++    state.active_endpoint_id =
++        ClientEndpointId::Ssh(crate::client::endpoint::ProfileId::generate());
++    outcome.actions.clear();
++    state.activate_context_menu_item(open, &mut outcome);
++    assert!(outcome.actions.is_empty());
++    assert!(state.endpoint_error.is_some());
++}
++
++#[test]
++fn divider_groups_workspace_drag_changes_membership_and_cancels_outside_drop() {
++    let mut state = divider_groups_state();
++    state.dividers[1].collapsed = true;
++    state.compose(120, 40).unwrap();
++    let source = state.hits.workspaces[0].rect;
++    let target = state.hits.divider_rows[1].0;
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Left),
++        source.x + 3,
++        source.y,
++    );
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Drag(MouseButton::Left),
++        target.x + 3,
++        target.y,
++    );
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Up(MouseButton::Left),
++        target.x + 3,
++        target.y,
++    );
++    assert_eq!(state.dividers[0].members.as_ref().unwrap(), &["ws_2"]);
++    assert!(state.dividers[1]
++        .members
++        .as_ref()
++        .unwrap()
++        .contains(&"ws_1".into()));
++    assert!(!state.dividers[1].collapsed);
++    let changed = state.dividers.clone();
++    state.compose(120, 40).unwrap();
++    let source = state
++        .hits
++        .workspaces
++        .iter()
++        .find(|hit| hit.workspace_id == "ws_2")
++        .unwrap()
++        .rect;
++    let target = state.hits.divider_rows[1].0;
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Down(MouseButton::Left),
++        source.x + 3,
++        source.y,
++    );
++    divider_mvp_mouse(
++        &mut state,
++        MouseEventKind::Drag(MouseButton::Left),
++        target.x + 3,
++        target.y,
++    );
++    let outcome = divider_mvp_mouse(&mut state, MouseEventKind::Up(MouseButton::Left), 90, 35);
++    assert!(outcome.actions.is_empty());
++    assert_eq!(state.dividers, changed);
++}
++
++#[test]
++#[ignore = "manual divider composition scaling profile"]
++fn divider_groups_render_scale_profile() {
++    for count in [1, 15] {
++        let mut state = divider_groups_state();
++        let mut projected = snapshot();
++        let template = projected.workspaces[0].clone();
++        projected.workspaces = (0..count)
++            .map(|index| {
++                let mut workspace = template.clone();
++                workspace.workspace_id = format!("ws_{}", index + 1);
++                workspace.focused = index == 0;
++                workspace
++            })
++            .collect();
++        state.set_snapshot(Box::new(projected));
++        let mut next = surface();
++        next.frame =
++            FrameData::from_ratatui_buffer(&Buffer::with_lines(vec!["x".repeat(120); 30]), None);
++        let template = next.panes[0].clone();
++        next.panes = (0..count)
++            .map(|index| {
++                let mut pane = template.clone();
++                pane.pane_id = format!("pane_{}", index + 1);
++                pane.inner_rect = SurfaceRect {
++                    x: if count == 1 { 0 } else { (index % 5) * 24 },
++                    y: if count == 1 { 0 } else { (index / 5) * 10 },
++                    width: if count == 1 { 120 } else { 24 },
++                    height: if count == 1 { 30 } else { 10 },
++                };
++                pane.rect = pane.inner_rect;
++                pane
++            })
++            .collect();
++        state.set_pane_surface(next);
++        let mut baseline = 1;
++        for grouped in [false, true] {
++            state.dividers = if grouped {
++                vec![SidebarDivider {
++                    title: "업무".into(),
++                    position: 0,
++                    members: Some((1..=count).map(|index| format!("ws_{index}")).collect()),
++                    ..Default::default()
++                }]
++            } else {
++                Vec::new()
++            };
++            for _ in 0..20 {
++                std::hint::black_box(state.compose(146, 32).unwrap());
++            }
++            let mut samples = Vec::new();
++            for _ in 0..200 {
++                let start = std::time::Instant::now();
++                std::hint::black_box(state.compose(146, 32).unwrap());
++                samples.push(start.elapsed().as_nanos());
++            }
++            samples.sort_unstable();
++            if !grouped {
++                baseline = samples[100].max(1);
++            }
++            eprintln!("divider panes={count} grouped={grouped} median_us={:.1} p95_us={:.1} vs_plain={:.2}", samples[100] as f64 / 1000.0, samples[190] as f64 / 1000.0, samples[100] as f64 / baseline as f64);
++            assert!(state.pending_requests.is_empty());
++        }
++    }
++}
++
++#[test]
++fn divider_groups_numeric_jump_reveals_space_below_collapsed_overflow() {
++    let mut state = divider_groups_state();
++    let mut projected = state.snapshot.as_deref().unwrap().clone();
++    for index in 4..=9 {
++        let mut workspace = projected.workspaces[1].clone();
++        workspace.workspace_id = format!("ws_{index}");
++        projected.workspaces.push(workspace);
++    }
++    state.set_snapshot(Box::new(projected));
++    state.dividers[1].members = Some((3..=9).map(|index| format!("ws_{index}")).collect());
++    state.dividers[1].collapsed = true;
++    state.compose(120, 16).unwrap();
++    state.handle_input_bytes(b"\x1b[57;9u");
++    state.compose(120, 16).unwrap();
++    assert!(!state.dividers[1].collapsed);
++    assert!(state
++        .hits
++        .workspaces
++        .iter()
++        .any(|hit| hit.workspace_id == "ws_9"));
++}
+--- a/src/client/shell_runtime.rs
++++ b/src/client/shell_runtime.rs
+@@ -1,3 +1,5 @@
++// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
+ use super::*;
+ 
+ pub(super) fn dispatch_client_shell_actions(
+@@ -45,6 +47,26 @@
+                     target,
+                     force: false,
+                 });
++            }
++            shell::ClientShellAction::OpenLocalFolder(path) => {
++                let result = if path.is_absolute() && path.is_dir() {
++                    crate::platform::open_url(&path.to_string_lossy())
++                } else {
++                    Err(std::io::Error::new(
++                        std::io::ErrorKind::NotFound,
++                        "존재하는 로컬 폴더가 필요합니다.",
++                    ))
++                };
++                match result {
++                    Ok(Some(child)) => detached_process_children.push(child),
++                    Ok(None) => {}
++                    Err(error) => {
++                        if let Some(shell) = shell.as_deref_mut() {
++                            shell.set_endpoint_error(format!("폴더 열기 실패: {error}"));
++                        }
++                        repaint = true;
++                    }
++                }
+             }
+             shell::ClientShellAction::OpenSafeWebUrl(url) => {
+                 if crate::app::actions::safe_web_url(&url).is_some() {

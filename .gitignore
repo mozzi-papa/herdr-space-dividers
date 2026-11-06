@@ -1,0 +1,18 @@
+# 로컬 실행 결과는 배포 대상에 포함하지 않습니다.
+/current
+/previous
+/releases/
+/backups/
+/build-cache/
+/update-logs/
+/.update.lock
+/herdr-v*.tar.gz
+/herdr-*/
+/zig-*/
+__pycache__/
+*.py[cod]
+*.log
+*.ansi
+.DS_Store
+.env
+.env.*

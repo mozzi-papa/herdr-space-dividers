@@ -1,0 +1,26 @@
+Herdr Space Dividers
+Copyright (c) 2026 KangUnMo (independent tools and modifications)
+
+This is an unofficial customization of Herdr, not an official Herdr plugin
+or release. It is not affiliated with or endorsed by the Herdr project.
+
+Independent shell/Python tools, tests and documentation in this repository
+are licensed under the MIT License in LICENSE.
+
+patches/sidebar.patch and patches/manifest.json are distributed under
+Apache License 2.0. The patch contains source context from Herdr v0.9.5 and
+modifications for sidebar divider rows, grouping, collapse/expand, undo,
+workspace folder actions, persistence and related client tests.
+
+Original project: https://github.com/herdrdev/herdr
+Original source: https://github.com/herdrdev/herdr/tree/v0.9.5
+Original license: licenses/Apache-2.0.txt
+
+Original Herdr copyrights and attribution notices remain applicable.
+Every changed Rust source file produced by this patch includes a notice
+identifying the modification. See patches/manifest.json for the file list.
+
+The upstream v0.9.5 source archive has no root NOTICE file to reproduce.
+No full Herdr source archive, prebuilt Herdr binary, Zig distribution or
+vendored dependencies are included in this source distribution. Their
+respective licenses apply when fetched and built separately.
