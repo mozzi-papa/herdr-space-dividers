@@ -16,8 +16,10 @@ Herdr의 `spaces`에 구분선·분류·접기·드래그를 더하는 비공식
 
 Homebrew와 공식 Herdr의 **기본 로컬 서버**를 준비해 주세요.
 
+처음 설치할 때는 개인 배포 저장소인 `tap`을 등록해야 합니다. 아래 한 줄로 저장소 등록과 설치를 이어서 진행할 수 있습니다.
+
 ```sh
-brew install kangunmo/tap/herdr-space-dividers
+brew tap kangunmo/tap && brew install kangunmo/tap/herdr-space-dividers
 ```
 
 빌드된 실행 파일을 설치하므로 사용자에게 Rust·Zig·Python은 필요하지 않습니다.
@@ -54,6 +56,8 @@ herdr-dividers
 숫자 이동 설정, 드래그 경계의 의미와 저장 위치는 [상세 사용법](docs/USAGE.md)을 참고해 주세요.
 
 ## 업데이트도 Homebrew로
+
+이미 설치한 패키지의 새 버전을 받을 때 사용합니다. 처음 설치하는 경우에는 위의 설치 명령을 사용해 주세요.
 
 ```sh
 brew upgrade kangunmo/tap/herdr-space-dividers
@@ -120,4 +124,4 @@ python3 -m unittest discover -s tools -p 'test_*.py' -v
 
 ## English
 
-Unofficial Herdr workspace dividers for Apple Silicon macOS. Install with `brew install kangunmo/tap/herdr-space-dividers`, then run `herdr-dividers` outside Herdr. No Rust, Zig or Python is required for the prebuilt package. It attaches to your existing default local Herdr server without replacing the official command. Package 0.1.0 targets Herdr 0.9.5. Independent tools/docs are MIT; the patch is Apache-2.0. Third-party notices are bundled. Not affiliated with Herdr, not Developer ID signed/notarized, and not a guarantee of future compatibility.
+Unofficial Herdr workspace dividers for Apple Silicon macOS. Register the tap and install with `brew tap kangunmo/tap && brew install kangunmo/tap/herdr-space-dividers`, then run `herdr-dividers` outside Herdr. Use `brew upgrade kangunmo/tap/herdr-space-dividers` for updates after installation. No Rust, Zig or Python is required for the prebuilt package. It attaches to your existing default local Herdr server without replacing the official command. Package 0.1.0 targets Herdr 0.9.5. Independent tools/docs are MIT; the patch is Apache-2.0. Third-party notices are bundled. Not affiliated with Herdr, not Developer ID signed/notarized, and not a guarantee of future compatibility.
