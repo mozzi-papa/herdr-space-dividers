@@ -20,7 +20,7 @@
     <text x="350" y="213" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="23">구분하고, 접고, 다시 이어서 작업하세요.</text>
     <text x="350" y="253" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="17">독립 구분선 · 소속 유지 · 드래그 · 편집 취소</text>
     <rect x="350" y="294" width="652" height="65" rx="10" fill="#162332" stroke="#334155"/>
-    <text x="370" y="332" fill="#cbd5e1" font-size="16">brew install kangunmo/tap/herdr-space-dividers</text>
+    <text x="370" y="332" fill="#cbd5e1" font-size="14">brew tap kangunmo/tap &amp;&amp; brew install kangunmo/tap/herdr-space-dividers</text>
     <text x="350" y="404" fill="#64748b" font-size="13">UNOFFICIAL CLIENT · APPLE SILICON · LOCAL SETTINGS</text>
   </g>
 </svg>
