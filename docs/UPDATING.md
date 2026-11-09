@@ -1,5 +1,17 @@
 # 업데이트와 복구
 
+## Homebrew 설치
+
+```sh
+brew upgrade kangunmo/tap/herdr-space-dividers
+herdr-dividers --version
+```
+
+검증한 패키지 릴리스를 설치합니다. 패키지 버전과 기반 Herdr 버전은 구분합니다. 구분 설정은 기존 JSON 경로를 유지합니다. 설치된 명령을 제거하려면 `brew uninstall herdr-space-dividers`를 사용하며, 설정 JSON을 자동 삭제하지 않습니다.
+
+아래 스크립트 안내는 **소스 빌드 설치 전용**입니다. `update-custom.sh --rollback`으로 Homebrew 설치를 되돌릴 수는 없습니다. Homebrew 설치의 버전 선택과 복구는 해당 릴리스와 Homebrew 방식에 맞게 진행해 주세요.
+
+
 ## 두 종류의 업데이트
 
 **공식 Herdr 업데이트**는 공식 실행 파일을 갱신합니다. **이 프로젝트의 업데이트 도구**는 지정한 Herdr 소스에 패치를 적용한 별도 수정본을 만듭니다. 공식 업데이트만으로 수정본에 새 기능이 자동 병합되지는 않습니다.

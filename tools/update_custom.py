@@ -164,7 +164,7 @@ def apply_patch(base, source, log):
     return manifest
 
 
-def build_and_verify(base, source, version, manifest, log, run_dir):
+def build_and_verify(base, source, version, manifest, log, run_dir, release_build=False):
     environment = os.environ.copy()
     environment.setdefault("RUSTUP_TOOLCHAIN", "1.96.1")
     environment["CARGO_BUILD_JOBS"] = "4"
@@ -175,13 +175,14 @@ def build_and_verify(base, source, version, manifest, log, run_dir):
     if not zig:
         raise UpdateError("Zig 실행 파일이 필요합니다. ZIG 환경 변수로 경로를 지정해 주세요.")
     environment["ZIG"] = zig
+    profile_args = ["--release"] if release_build else []
     print("[검증] 필수 기능 테스트 목록과 전체 클라이언트 테스트", flush=True)
-    listing = run(["cargo", "test", "--locked", "--bin", "herdr", "client::shell::", "--", "--list"],
+    listing = run(["cargo", "test", *profile_args, "--locked", "--bin", "herdr", "client::shell::", "--", "--list"],
                   log=log, cwd=source, env=environment)
     for test in manifest["required_tests"]:
         if f"::{test}: test" not in listing:
             raise UpdateError(f"필수 기능 테스트를 찾을 수 없습니다: {test}")
-    test_output = run(["cargo", "test", "--locked", "--bin", "herdr", "client::shell::", "--",
+    test_output = run(["cargo", "test", *profile_args, "--locked", "--bin", "herdr", "client::shell::", "--",
                        "--test-threads=4"], log=log, cwd=source, env=environment)
     if not re.search(r"test result: ok\. [1-9]\d* passed; 0 failed;", test_output):
         raise UpdateError("클라이언트 테스트의 성공 결과를 확인할 수 없습니다.")
@@ -189,9 +190,9 @@ def build_and_verify(base, source, version, manifest, log, run_dir):
         if not re.search(r"test [^\n]*::" + re.escape(test) + r" \.\.\. ok(?:\n|$)", test_output):
             raise UpdateError(f"필수 기능 테스트가 실제로 통과하지 않았습니다: {test}")
     print("[빌드] 새 수정본 실행 파일 생성", flush=True)
-    run(["cargo", "build", "--locked", "--bin", "herdr"], log=log, cwd=source, env=environment)
+    run(["cargo", "build", *profile_args, "--locked", "--bin", "herdr"], log=log, cwd=source, env=environment)
     run(["cargo", "fmt", "--all", "--check"], log=log, cwd=source, env=environment)
-    binary = base / "build-cache/debug/herdr"
+    binary = base / "build-cache" / ("release" if release_build else "debug") / "herdr"
     found_version = run([str(binary), "--version"], log=log, env=environment, timeout=15).strip()
     if found_version != f"herdr {version}":
         raise UpdateError(f"빌드 결과 버전이 다릅니다: {found_version}")
