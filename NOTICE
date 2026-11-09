@@ -21,6 +21,8 @@ Every changed Rust source file produced by this patch includes a notice
 identifying the modification. See patches/manifest.json for the file list.
 
 The upstream v0.9.5 source archive has no root NOTICE file to reproduce.
-No full Herdr source archive, prebuilt Herdr binary, Zig distribution or
-vendored dependencies are included in this source distribution. Their
-respective licenses apply when fetched and built separately.
+No full Herdr source archive, Zig distribution or vendored dependencies
+are included in the repository source distribution. Prebuilt release
+archives include the modified Herdr client and third-party notices under
+share/herdr-space-dividers/third-party. The original projects and their
+respective licenses remain applicable.

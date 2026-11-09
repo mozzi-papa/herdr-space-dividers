@@ -769,12 +769,10 @@
      #[serde(default, skip_serializing_if = "Option::is_none")]
      pub(super) sidebar_width: Option<u16>,
      #[serde(default, skip_serializing_if = "Option::is_none")]
-@@ -28,6 +36,35 @@
-     pub(super) collapsed_groups: Vec<String>,
-     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+@@ -30,13 +38,47 @@
      pub(super) remote_collapsed_groups: Vec<ClientRemoteCollapsedGroups>,
-+}
-+
+ }
+ 
 +// 손상된 구분선 항목이 기존 너비·정렬 설정까지 무효화하지 않도록 분리합니다.
 +fn deserialize_dividers<'de, D>(deserializer: D) -> Result<Vec<super::SidebarDivider>, D::Error>
 +where
@@ -802,9 +800,58 @@
 +        .collect::<Vec<_>>();
 +    dividers.sort_by_key(|divider| divider.position);
 +    Ok(dividers)
- }
- 
++}
++
++// 릴리스 빌드에서도 기존 구분선 JSON 저장 경로를 유지합니다.
++fn client_state_dir() -> PathBuf {
++    crate::config::state_dir().with_file_name("herdr-dev")
++}
++
  pub(super) fn path_for_local_endpoint(socket_path: &Path) -> PathBuf {
+     let mut hash = 0xcbf29ce484222325u64;
+     for byte in socket_path.to_string_lossy().as_bytes() {
+         hash ^= u64::from(*byte);
+         hash = hash.wrapping_mul(0x100000001b3);
+     }
+-    crate::config::state_dir()
++    client_state_dir()
+         .join("client-shell")
+         .join(format!("local-{hash:016x}.json"))
+ }
+@@ -50,7 +92,7 @@
+         hash.update((part.len() as u64).to_le_bytes());
+         hash.update(part.as_bytes());
+     }
+-    crate::config::state_dir()
++    client_state_dir()
+         .join("client-shell")
+         .join(format!("remote-{:x}.json", hash.finalize()))
+ }
+@@ -86,6 +128,24 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++
++    #[test]
++    fn preferences_build_mode_keeps_legacy_state_directory() {
++        let path = path_for_local_endpoint(Path::new("/run/herdr/one.sock"));
++        assert_eq!(
++            path.parent()
++                .unwrap()
++                .parent()
++                .unwrap()
++                .file_name()
++                .unwrap(),
++            "herdr-dev"
++        );
++        assert_eq!(
++            client_state_dir().parent(),
++            crate::config::state_dir().parent()
++        );
++    }
+ 
+     #[test]
+     fn endpoint_paths_are_stable_and_distinct() {
 --- a/src/client/shell/render.rs
 +++ b/src/client/shell/render.rs
 @@ -1,3 +1,5 @@

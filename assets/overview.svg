@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="440" viewBox="0 0 1080 440" role="img" aria-labelledby="title description">
+  <title id="title">Herdr Space Dividers 구성 예시</title>
+  <desc id="description">업무와 개인 분류로 나눈 스페이스와 전용 실행 명령을 보여주는 설명용 화면입니다. 실제 사용자 데이터나 화면 캡처가 아닙니다.</desc>
+  <rect width="1080" height="440" rx="20" fill="#0f1724"/>
+  <rect x="1" y="1" width="1078" height="438" rx="19" fill="none" stroke="#334155"/>
+  <path d="M1 52H1079" stroke="#334155"/>
+  <g fill="#64748b"><circle cx="26" cy="26" r="6"/><circle cx="48" cy="26" r="6"/><circle cx="70" cy="26" r="6"/></g>
+  <text x="540" y="32" text-anchor="middle" fill="#cbd5e1" font-size="15" font-family="system-ui, sans-serif">Herdr Space Dividers</text>
+  <path d="M306 53V439" stroke="#334155"/>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17">
+    <text x="24" y="87" fill="#94a3b8">spaces</text>
+    <text x="24" y="133" fill="#7dd3fc">▼ 업무 · 2 ─────────</text>
+    <text x="45" y="171" fill="#e2e8f0">○ project-api</text>
+    <rect x="36" y="188" width="251" height="36" rx="5" fill="#1e334d"/>
+    <text x="45" y="212" fill="#f8fafc">○ project-web</text>
+    <text x="24" y="274" fill="#c4b5fd">▶ 개인 · 3 ─────────</text>
+    <text x="24" y="410" fill="#94a3b8">new   div       menu</text>
+    <text x="350" y="106" fill="#64748b">ONE COMMAND TO YOUR WORKSPACE</text>
+    <text x="350" y="157" fill="#7dd3fc" font-size="27">herdr-dividers</text>
+    <text x="350" y="213" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="23">구분하고, 접고, 다시 이어서 작업하세요.</text>
+    <text x="350" y="253" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="17">독립 구분선 · 소속 유지 · 드래그 · 편집 취소</text>
+    <rect x="350" y="294" width="652" height="65" rx="10" fill="#162332" stroke="#334155"/>
+    <text x="370" y="332" fill="#cbd5e1" font-size="16">brew install kangunmo/tap/herdr-space-dividers</text>
+    <text x="350" y="404" fill="#64748b" font-size="13">UNOFFICIAL CLIENT · APPLE SILICON · LOCAL SETTINGS</text>
+  </g>
+</svg>

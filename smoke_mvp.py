@@ -19,6 +19,7 @@ import unicodedata
 
 root = Path(__file__).resolve().parent
 binary = Path(os.environ.get('HERDR_MVP_BINARY', root / 'current/herdr')).resolve()
+reconnect_binary = Path(os.environ.get('HERDR_MVP_RECONNECT_BINARY', binary)).resolve()
 log_dir = Path(os.environ.get('HERDR_MVP_LOG_DIR', root))
 log_dir.mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(prefix='herdr-div-mvp-') as temp:
@@ -132,6 +133,10 @@ with tempfile.TemporaryDirectory(prefix='herdr-div-mvp-') as temp:
         assert len(preference_files) == 1, preference_files
         saved = json.loads(preference_files[0].read_text())
         assert saved['dividers'] == [{'position': 1, 'title': '복원', 'members': [], 'collapsed': False}], saved
+        row = sidebar_title_row('복')
+        os.write(master, f'\x1b[<0;6;{row}M\x1b[<32;6;3M\x1b[<0;6;3m'.encode())
+        drain(.3)
+        assert saved_preferences()['dividers'][0]['members'] == [before['focused_workspace_id']]
         click(0, sidebar_title_row('복'))
         drain(.3)
         assert saved_preferences()['dividers'][0]['collapsed'] is True
@@ -141,7 +146,7 @@ with tempfile.TemporaryDirectory(prefix='herdr-div-mvp-') as temp:
         os.close(master)
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 120, 0, 0))
-        process = subprocess.Popen([str(binary)], stdin=slave, stdout=slave, stderr=slave,
+        process = subprocess.Popen([str(reconnect_binary)], stdin=slave, stdout=slave, stderr=slave,
                                    env=env, cwd=area, preexec_fn=controlling_terminal)
         os.close(slave)
         output.clear()
@@ -149,6 +154,7 @@ with tempfile.TemporaryDirectory(prefix='herdr-div-mvp-') as temp:
         visible = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', output.decode('utf-8', errors='replace')).replace(' ', '')
         assert '복원' in visible, visible[-1500:]
         assert saved_preferences()['dividers'][0]['collapsed'] is True
+        assert saved_preferences()['dividers'][0]['members'] == [before['focused_workspace_id']]
         print('PASS: 분류 ID·접기 저장, 숫자 이동 자동 펼치기, 새 클라이언트 재접속 복원')
         after = rpc('session.snapshot', {})['snapshot']
         for key in ['workspaces','tabs','panes','agents']:
