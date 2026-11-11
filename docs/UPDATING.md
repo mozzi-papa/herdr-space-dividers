@@ -3,7 +3,7 @@
 ## Homebrew 설치
 
 ```sh
-brew upgrade kangunmo/tap/herdr-space-dividers
+brew upgrade mozzi-papa/tap/herdr-space-dividers
 herdr-dividers --version
 ```
 

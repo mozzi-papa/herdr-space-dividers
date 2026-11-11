@@ -33,4 +33,4 @@ python3 tools/build_release.py
 
 첫 패키지 버전은 0.1.0이며 기반 Herdr 버전은 0.9.5입니다. 패키지 버전과 Herdr 버전은 서로 구분합니다. 공개 formula는 버전이 고정된 릴리스 URL과 SHA-256을 사용하며, 사용자는 Homebrew로 업데이트합니다. `update-custom.sh --rollback`은 소스 빌드 전용이므로 Homebrew 패키지의 복구 명령으로 안내하지 않습니다.
 
-승인받은 공개 단계에서는 소스를 먼저 올리고, `v0.1.0` 릴리스에 `dist/herdr-space-dividers-v0.1.0-macos-arm64.tar.gz`와 `dist/SHA256SUMS`를 첨부합니다. 생성된 공개 formula를 별도 `KangUnMo/homebrew-tap` 저장소의 `Formula/herdr-space-dividers.rb`에 배포합니다. 로컬 설치 확인용 `file://` formula는 공개하지 않습니다.
+승인받은 공개 단계에서는 소스를 먼저 올리고, `v0.1.0` 릴리스에 `dist/herdr-space-dividers-v0.1.0-macos-arm64.tar.gz`와 `dist/SHA256SUMS`를 첨부합니다. 생성된 공개 formula를 별도 `mozzi-papa/homebrew-tap` 저장소의 `Formula/herdr-space-dividers.rb`에 배포합니다. 로컬 설치 확인용 `file://` formula는 공개하지 않습니다.
