@@ -72,7 +72,7 @@
  use super::*;
  
  impl ClientContextMenuOverlay {
-@@ -5,7 +7,12 @@
+@@ -5,7 +7,19 @@
          use ClientContextMenuAction as Action;
  
          let item = |label, action| ClientContextMenuItem { label, action };
@@ -82,11 +82,18 @@
 +                item("이름 변경", Action::Rename),
 +                item("구분선 삭제", Action::Close),
 +                item("구분선 편집 실행 취소", Action::UndoDivider),
++                item("색상 변경", Action::DividerColor),
 +            ],
++            ClientContextMenuTarget::DividerColor { .. } => DIVIDER_COLORS
++                .iter()
++                .enumerate()
++                .map(|(index, (label, _))| item(label, Action::SetDividerColor(index)))
++                .chain([item("직접 입력 (#rrggbb)", Action::DividerColorInput)])
++                .collect(),
              ClientContextMenuTarget::Workspace { is_git: false, .. } => {
                  vec![item("Rename", Action::Rename), item("Close", Action::Close)]
              }
-@@ -79,7 +86,14 @@
+@@ -79,7 +93,14 @@
                  ]);
                  items
              }
@@ -101,11 +108,40 @@
      }
  }
  
-@@ -192,6 +206,25 @@
+@@ -191,7 +212,54 @@
+             outcome.repaint = true;
              return;
          };
++        let (menu_x, menu_y) = (menu.x, menu.y);
          match menu.target {
++            ClientContextMenuTarget::DividerColor { index } => match action {
++                ClientContextMenuAction::SetDividerColor(choice) if index < self.dividers.len() => {
++                    self.checkpoint_dividers();
++                    let hex = DIVIDER_COLORS.get(choice).map_or("", |(_, hex)| *hex);
++                    self.dividers[index].color = (!hex.is_empty()).then(|| hex.to_owned());
++                    self.persist_chrome_preferences(outcome);
++                }
++                ClientContextMenuAction::DividerColorInput => {
++                    if let Some(divider) = self.dividers.get(index) {
++                        self.overlay = Some(ClientShellOverlay::Rename(ClientRenameOverlay {
++                            title: "구분선 색상 (#rrggbb, 비우면 기본색)",
++                            input: TextEditor::new(divider.color.as_deref().unwrap_or(""), false),
++                            target: ClientRenameTarget::DividerColor { index },
++                        }));
++                    }
++                }
++                _ => {}
++            },
 +            ClientContextMenuTarget::Divider { index } => match action {
++                ClientContextMenuAction::DividerColor => {
++                    self.overlay =
++                        Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
++                            target: ClientContextMenuTarget::DividerColor { index },
++                            x: menu_x,
++                            y: menu_y,
++                            highlighted: 0,
++                        }));
++                }
 +                ClientContextMenuAction::Rename => {
 +                    if let Some(divider) = self.dividers.get(index) {
 +                        self.overlay = Some(ClientShellOverlay::Rename(ClientRenameOverlay {
@@ -127,7 +163,7 @@
              ClientContextMenuTarget::Workspace {
                  workspace_id,
                  close_group,
-@@ -229,6 +262,35 @@
+@@ -229,6 +297,35 @@
          use crate::input::KeybindAction;
  
          match action {
@@ -624,10 +660,12 @@
                              if let Some(method) = self.workspace_move_method(
                                  &source_workspace_id,
                                  before_workspace_id.as_deref(),
-@@ -1835,6 +1914,22 @@
-                 if !self.config.mouse_capture {
-                     return;
+@@ -1833,6 +1912,22 @@
+                     }
                  }
+                 if !self.config.mouse_capture {
++                    return;
++                }
 +                if let Some((_, index)) = self
 +                    .hits
 +                    .divider_rows
@@ -642,18 +680,13 @@
 +                            highlighted: 0,
 +                        }));
 +                    outcome.repaint = true;
-+                    return;
-+                }
-                 let workspace_id = (!self.sidebar_collapsed)
-                     .then(|| self.active_endpoint_workspace_at(point))
-                     .flatten();
-@@ -2043,6 +2138,23 @@
+                     return;
                  }
-                 if super::contains(self.hits.global_launcher, point) {
-                     self.toggle_global_menu();
-+                    outcome.repaint = true;
-+                    return;
-+                }
+                 let workspace_id = (!self.sidebar_collapsed)
+@@ -2046,6 +2141,23 @@
+                     outcome.repaint = true;
+                     return;
+                 }
 +                if let Some((_, index)) = self
 +                    .hits
 +                    .divider_rows
@@ -668,9 +701,12 @@
 +                }
 +                if super::contains(self.hits.new_divider, point) {
 +                    self.open_new_divider_overlay();
-                     outcome.repaint = true;
-                     return;
-                 }
++                    outcome.repaint = true;
++                    return;
++                }
+                 if super::contains(self.hits.new_workspace, point) {
+                     self.record_binding(
+                         crate::input::KeybindMatch::Action(
 --- a/src/client/shell/overlay_input.rs
 +++ b/src/client/shell/overlay_input.rs
 @@ -1,3 +1,5 @@
@@ -679,10 +715,11 @@
  use super::*;
  
  impl ClientShellState {
-@@ -328,6 +330,27 @@
+@@ -327,7 +329,28 @@
+                 self.snapshot
                      .as_deref()
                      .and_then(|snapshot| snapshot.focused_workspace_id.clone())
-             })
++            })
 +    }
 +
 +    pub(super) fn open_new_divider_overlay(&mut self) {
@@ -697,7 +734,7 @@
 +                    .iter()
 +                    .position(|entry| snapshot.workspaces[entry.index].focused)
 +                    .map_or(0, |index| index + 1)
-+            })
+             })
 +            .unwrap_or(0);
 +        self.overlay = Some(ClientShellOverlay::Rename(ClientRenameOverlay {
 +            title: "구분선 제목",
@@ -707,7 +744,7 @@
      }
  
      pub(super) fn open_new_workspace_overlay(&mut self) {
-@@ -936,6 +959,40 @@
+@@ -936,6 +959,52 @@
          };
          let trimmed = rename.input.trim();
          let method = match rename.target {
@@ -723,6 +760,18 @@
 +                        divider.title = title;
 +                        self.persist_chrome_preferences(outcome);
 +                    }
++                }
++                None
++            }
++            ClientRenameTarget::DividerColor { index } => {
++                // 빈 입력은 기본색, 형식이 틀리면 변경하지 않습니다.
++                let color = (!trimmed.is_empty())
++                    .then(|| parse_hex_color(trimmed))
++                    .map_or(Some(None), |parsed| parsed.map(Some));
++                if let (Some(color), true) = (color, index < self.dividers.len()) {
++                    self.checkpoint_dividers();
++                    self.dividers[index].color = color;
++                    self.persist_chrome_preferences(outcome);
 +                }
 +                None
 +            }
@@ -769,7 +818,7 @@
      #[serde(default, skip_serializing_if = "Option::is_none")]
      pub(super) sidebar_width: Option<u16>,
      #[serde(default, skip_serializing_if = "Option::is_none")]
-@@ -30,13 +38,47 @@
+@@ -30,13 +38,48 @@
      pub(super) remote_collapsed_groups: Vec<ClientRemoteCollapsedGroups>,
  }
  
@@ -794,6 +843,7 @@
 +                .collect::<String>()
 +                .trim()
 +                .to_owned();
++            divider.color = divider.color.as_deref().and_then(super::parse_hex_color);
 +            (!divider.title.is_empty()).then_some(divider)
 +        })
 +        .take(32)
@@ -818,7 +868,7 @@
          .join("client-shell")
          .join(format!("local-{hash:016x}.json"))
  }
-@@ -50,7 +92,7 @@
+@@ -50,7 +93,7 @@
          hash.update((part.len() as u64).to_le_bytes());
          hash.update(part.as_bytes());
      }
@@ -827,12 +877,10 @@
          .join("client-shell")
          .join(format!("remote-{:x}.json", hash.finalize()))
  }
-@@ -86,6 +128,24 @@
- #[cfg(test)]
- mod tests {
+@@ -88,6 +131,24 @@
      use super::*;
-+
-+    #[test]
+ 
+     #[test]
 +    fn preferences_build_mode_keeps_legacy_state_directory() {
 +        let path = path_for_local_endpoint(Path::new("/run/herdr/one.sock"));
 +        assert_eq!(
@@ -849,9 +897,11 @@
 +            crate::config::state_dir().parent()
 +        );
 +    }
- 
-     #[test]
++
++    #[test]
      fn endpoint_paths_are_stable_and_distinct() {
+         let first = path_for_local_endpoint(Path::new("/run/herdr/one.sock"));
+         let again = path_for_local_endpoint(Path::new("/run/herdr/one.sock"));
 --- a/src/client/shell/render.rs
 +++ b/src/client/shell/render.rs
 @@ -1,3 +1,5 @@
@@ -876,15 +926,15 @@
  use super::*;
  use ratatui::{
      text::Line,
-@@ -195,6 +197,8 @@
-         },
+@@ -196,6 +198,8 @@
      );
  }
-+
-+use super::divider_groups::DividerRow as SidebarEntry;
  
++use super::divider_groups::DividerRow as SidebarEntry;
++
  pub(crate) fn render_sidebar(
      buffer: &mut Buffer,
+     area: Rect,
 @@ -226,7 +230,8 @@
              .add_modifier(Modifier::BOLD),
      );
@@ -961,7 +1011,7 @@
 +                        "─".repeat(content_width as usize)
 +                    ),
 +                    Style::default()
-+                        .fg(palette.accent)
++                        .fg(divider_color(&divider.color).unwrap_or(palette.accent))
 +                        .add_modifier(Modifier::BOLD),
 +                );
 +                y = y.saturating_add(2 + gaps[entry_position]);
@@ -1062,11 +1112,14 @@
      ActivateEndpoint {
          endpoint_id: ClientEndpointId,
          target: Option<ClientEndpointFocusTarget>,
-@@ -295,6 +304,12 @@
+@@ -295,6 +304,15 @@
  
  #[derive(Debug)]
  pub(super) enum ClientRenameTarget {
 +    Divider {
++        index: usize,
++    },
++    DividerColor {
 +        index: usize,
 +    },
 +    NewDivider {
@@ -1075,27 +1128,33 @@
      NewWorkspace {
          source_workspace_id: Option<String>,
          cwd: Option<String>,
-@@ -512,6 +527,9 @@
+@@ -512,6 +530,12 @@
  pub(super) enum ClientContextMenuAction {
      Rename,
      Close,
 +    UndoDivider,
++    DividerColor,
++    DividerColorInput,
++    SetDividerColor(usize),
 +    OpenFolder,
 +    CopyFolderPath,
      NewWorktree,
      OpenWorktree,
      RemoveWorktree,
-@@ -529,6 +547,9 @@
+@@ -529,6 +553,12 @@
  
  #[derive(Debug)]
  pub(super) enum ClientContextMenuTarget {
 +    Divider {
 +        index: usize,
 +    },
++    DividerColor {
++        index: usize,
++    },
      Workspace {
          workspace_id: String,
          is_git: bool,
-@@ -882,6 +903,8 @@
+@@ -882,6 +912,8 @@
      pub(super) tab_press: Option<ClientTabPress>,
      pub(super) collapsed_groups: HashSet<String>,
      pub(super) remote_collapsed_groups: HashMap<ClientEndpointId, HashSet<String>>,
@@ -1104,10 +1163,12 @@
      pub(super) workspace_scroll: usize,
      pub(super) agent_scroll: usize,
      pub(super) pending_agent_reveal: Option<(ClientEndpointId, String)>,
-@@ -985,6 +1008,16 @@
+@@ -983,6 +1015,50 @@
+         scroll: 0,
+         preview: notes.preview,
      }
- }
- 
++}
++
 +#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 +pub(super) struct SidebarDivider {
 +    #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1116,12 +1177,44 @@
 +    pub(super) collapsed: bool,
 +    pub(super) position: usize,
 +    pub(super) title: String,
++    // "#rrggbb" 형식만 저장합니다. 없으면 테마 기본색을 씁니다.
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub(super) color: Option<String>,
 +}
 +
++// 팔레트 프리셋입니다. 항목 0은 기본색(테마색)으로 되돌립니다.
++pub(super) const DIVIDER_COLORS: [(&str, &str); 9] = [
++    ("기본색", ""),
++    ("● 빨강", "#ef5350"),
++    ("● 주황", "#ff9800"),
++    ("● 노랑", "#fdd835"),
++    ("● 초록", "#66bb6a"),
++    ("● 하늘", "#4fc3f7"),
++    ("● 파랑", "#5c8dff"),
++    ("● 보라", "#ab7df6"),
++    ("● 분홍", "#f06292"),
++];
++
++// "#rrggbb"만 허용합니다. 대소문자는 소문자로 통일합니다.
++pub(super) fn parse_hex_color(value: &str) -> Option<String> {
++    let value = value.trim();
++    let digits = value.strip_prefix('#')?;
++    (digits.len() == 6 && digits.bytes().all(|byte| byte.is_ascii_hexdigit()))
++        .then(|| value.to_ascii_lowercase())
++}
++
++pub(super) fn divider_color(value: &Option<String>) -> Option<ratatui::style::Color> {
++    let hex = parse_hex_color(value.as_deref()?)?;
++    let channel = |range| u8::from_str_radix(&hex[range], 16).ok();
++    Some(ratatui::style::Color::Rgb(
++        channel(1..3)?,
++        channel(3..5)?,
++        channel(5..7)?,
++    ))
+ }
+ 
  #[derive(Clone, Copy)]
- pub(super) struct WorkspaceEntry {
-     pub(super) index: usize,
-@@ -1056,6 +1089,8 @@
+@@ -1056,6 +1132,8 @@
              tab_press: None,
              collapsed_groups: preferences.collapsed_groups.into_iter().collect(),
              remote_collapsed_groups,
@@ -1130,7 +1223,7 @@
              workspace_scroll: 0,
              agent_scroll: 0,
              pending_agent_reveal: None,
-@@ -1188,7 +1223,7 @@
+@@ -1188,7 +1266,7 @@
          snapshot: &ClientShellSnapshot,
      ) -> Vec<WorkspaceEntry> {
          let empty_collapsed_groups = HashSet::new();
@@ -1139,15 +1232,14 @@
              render::workspace_entries(snapshot, &empty_collapsed_groups)
          } else {
              render::workspace_entries(
-@@ -1196,10 +1231,24 @@
+@@ -1196,10 +1274,24 @@
                  self.collapsed_groups_for_endpoint(&self.active_endpoint_id)
                      .unwrap_or(&empty_collapsed_groups),
              )
--        }
 +        };
 +        if !self.active_endpoint_id.is_local() || self.endpoints.len() > 1 {
 +            return entries;
-+        }
+         }
 +        divider_groups::rows(snapshot, &entries, &self.dividers, true)
 +            .into_iter()
 +            .filter_map(|row| {
@@ -1165,7 +1257,7 @@
          if self
              .hits
              .workspaces
-@@ -1208,13 +1257,24 @@
+@@ -1208,13 +1300,24 @@
          {
              return;
          }
@@ -1194,7 +1286,7 @@
          }
      }
  
-@@ -1585,7 +1645,38 @@
+@@ -1585,7 +1688,38 @@
                  Some(_) => {}
              }
          }
@@ -1233,7 +1325,7 @@
          self.reconcile_pending_workspace_highlight();
          let pending_surface = self.pending_pane_surface.take();
          if let Some(surface) = pending_surface {
-@@ -1855,7 +1946,7 @@
+@@ -1855,7 +1989,7 @@
      ///
      /// Every assignment must go through this setter so a repeated identical
      /// message gets a fresh deadline instead of inheriting the previous one.
@@ -1250,10 +1342,12 @@
  use super::*;
  
  #[test]
-@@ -527,3 +529,784 @@
+@@ -525,5 +527,841 @@
+         &request.method,
+         crate::api::schema::Method::WorkspaceClose(params)
              if params.workspace_id == "ws_1" && !params.close_group
-     ));
- }
++    ));
++}
 +
 +#[test]
 +fn divider_mvp_creates_only_a_visual_row_and_preserves_number_navigation() {
@@ -1283,7 +1377,7 @@
 +            target: ClientRenameTarget::NewDivider { position: 1 },
 +            ..
 +        }))
-+    ));
+     ));
 +    state.handle_input_bytes("업무".as_bytes());
 +    let submit = state.handle_input_bytes(b"\r");
 +    assert!(
@@ -1675,7 +1769,7 @@
 +        "저장 실패 시 화면의 구분선은 유지합니다."
 +    );
 +    std::fs::remove_dir(directory).unwrap();
-+}
+ }
 +
 +fn divider_groups_state() -> ClientShellState {
 +    let config: Config = toml::from_str("[keys]\nswitch_workspace = 'cmd+1..9'\n").unwrap();
@@ -1830,6 +1924,61 @@
 +    }
 +    assert_eq!(state.divider_undo.len(), 20);
 +    assert!(outcome.actions.is_empty());
++}
++
++#[test]
++fn divider_color_palette_hex_input_undo_and_invalid_values() {
++    let mut state = divider_groups_state();
++    let original = state.dividers.clone();
++    let mut outcome = ClientShellInput::default();
++    // 팔레트 프리셋 선택
++    state.overlay = Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
++        target: ClientContextMenuTarget::Divider { index: 0 },
++        x: 1,
++        y: 1,
++        highlighted: 0,
++    }));
++    let menu_index = |state: &ClientShellState, action| match &state.overlay {
++        Some(ClientShellOverlay::ContextMenu(menu)) => {
++            menu.items().iter().position(|item| item.action == action)
++        }
++        _ => None,
++    };
++    let open = menu_index(&state, ClientContextMenuAction::DividerColor).unwrap();
++    state.activate_context_menu_item(open, &mut outcome);
++    state.activate_context_menu_item(1, &mut outcome);
++    assert_eq!(state.dividers[0].color.as_deref(), Some("#ef5350"));
++    // 직접 입력: 대문자는 소문자로 저장, 형식 오류는 무시
++    let input = |state: &mut ClientShellState, text: &str| {
++        state.overlay = Some(ClientShellOverlay::Rename(ClientRenameOverlay {
++            title: "구분선 색상",
++            input: TextEditor::new(text, false),
++            target: ClientRenameTarget::DividerColor { index: 0 },
++        }));
++        state.handle_input_bytes(b"\r");
++    };
++    input(&mut state, "#ABCDEF");
++    assert_eq!(state.dividers[0].color.as_deref(), Some("#abcdef"));
++    for invalid in ["red", "#12345", "#12345g", "ffffff"] {
++        input(&mut state, invalid);
++        assert_eq!(state.dividers[0].color.as_deref(), Some("#abcdef"));
++    }
++    // 빈 입력은 기본색
++    input(&mut state, "");
++    assert_eq!(state.dividers[0].color, None);
++    // 실행 취소는 직전 색부터 되돌림
++    state.undo_divider_edit(&mut outcome);
++    assert_eq!(state.dividers[0].color.as_deref(), Some("#abcdef"));
++    while !state.divider_undo.is_empty() {
++        state.undo_divider_edit(&mut outcome);
++    }
++    assert_eq!(state.dividers, original);
++    assert_eq!(
++        divider_color(&Some("#102030".into())),
++        Some(ratatui::style::Color::Rgb(0x10, 0x20, 0x30))
++    );
++    assert_eq!(divider_color(&Some("bad".into())), None);
++    assert_eq!(divider_color(&None), None);
 +}
 +
 +#[test]

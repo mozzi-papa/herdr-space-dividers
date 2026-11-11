@@ -1,6 +1,6 @@
 {
   "base_version": "0.9.5",
-  "patch_sha256": "bc7b7de6d31bdae2309632228c78269e9a3c2bc9f740590fd0cb1bddc787b9c4",
+  "patch_sha256": "bc3573d14354bebc0f3a1aa8138c3f899501fa2b605a969d98c17c2194323205",
   "files": [
     "src/client/shell.rs",
     "src/client/shell/composition.rs",
@@ -22,6 +22,7 @@
     "divider_groups_migrate_members_and_keep_them_when_spaces_change",
     "divider_groups_collapse_click_and_numeric_jump_auto_expand_without_server_close",
     "divider_groups_undo_recovers_create_rename_drag_delete_and_caps_history",
+    "divider_color_palette_hex_input_undo_and_invalid_values",
     "divider_groups_workspace_drag_changes_membership_and_cancels_outside_drop",
     "divider_groups_numeric_jump_reveals_space_below_collapsed_overflow",
     "workspace_folder_actions_are_distinct_from_divider_editing",
