@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 KangUnMo
+# Copyright (c) 2026 mozzi-papa
 """검증된 Apple Silicon 릴리스와 Homebrew formula를 로컬에 준비합니다."""
 
 import argparse
@@ -93,7 +93,7 @@ def make_archive(payload, archive):
 
 def formula_text(version, sha256):
     return f'''# SPDX-License-Identifier: MIT
-# Copyright (c) 2026 KangUnMo
+# Copyright (c) 2026 mozzi-papa
 class HerdrSpaceDividers < Formula
   desc "Workspace dividers and grouping for Herdr (unofficial client)"
   homepage "https://github.com/mozzi-papa/herdr-space-dividers"

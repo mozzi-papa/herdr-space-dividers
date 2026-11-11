@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 KangUnMo
+# Copyright (c) 2026 mozzi-papa
 set -eu
 base_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 binary="$base_dir/current/herdr"

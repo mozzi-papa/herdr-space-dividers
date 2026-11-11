@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 KangUnMo
+# Copyright (c) 2026 mozzi-papa
 """별도 서버와 가상 터미널에서 구분 행 MVP를 검증합니다."""
 import base64
 import fcntl

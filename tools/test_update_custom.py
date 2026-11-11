@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 KangUnMo
+# Copyright (c) 2026 mozzi-papa
 """업데이트 실패 시 기존 수정본을 보존하는지 검사합니다."""
 
 import io
