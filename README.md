@@ -4,7 +4,7 @@
 
 Herdr의 `spaces`에 구분선·분류·접기·드래그를 더하는 비공식 클라이언트입니다.
 
-**Apple Silicon · Herdr 0.9.5 · 패키지 0.1.0 · 도구 MIT / 패치 Apache-2.0**
+**Apple Silicon · Herdr 0.9.5 · 패키지 0.1.1 · 도구 MIT / 패치 Apache-2.0**
 
 ![업무와 개인 분류로 정리한 Herdr 작업 공간의 구성 예시](assets/overview.svg)
 
@@ -19,7 +19,7 @@ Homebrew와 공식 Herdr의 **기본 로컬 서버**를 준비해 주세요.
 처음 설치할 때는 개인 배포 저장소인 `tap`을 등록해야 합니다. 아래 한 줄로 저장소 등록과 설치를 이어서 진행할 수 있습니다.
 
 ```sh
-brew tap kangunmo/tap && brew install kangunmo/tap/herdr-space-dividers
+brew tap mozzi-papa/tap && brew install mozzi-papa/tap/herdr-space-dividers
 ```
 
 빌드된 실행 파일을 설치하므로 사용자에게 Rust·Zig·Python은 필요하지 않습니다.
@@ -60,7 +60,7 @@ herdr-dividers
 이미 설치한 패키지의 새 버전을 받을 때 사용합니다. 처음 설치하는 경우에는 위의 설치 명령을 사용해 주세요.
 
 ```sh
-brew upgrade kangunmo/tap/herdr-space-dividers
+brew upgrade mozzi-papa/tap/herdr-space-dividers
 ```
 
 ```sh
@@ -69,6 +69,34 @@ herdr-dividers --help
 ```
 
 검증한 패키지 릴리스를 설치하는 방식입니다. 공식 Herdr가 업데이트되었다고 이 패치에 자동으로 병합되는 것은 아닙니다. 각 릴리스가 지원하는 Herdr 버전을 확인해 주세요. 기존 구분 설정은 디버그·릴리스 빌드 모두 같은 JSON 경로에서 읽습니다.
+
+## 문제가 생겼을 때: 순정 Herdr로 실행
+
+`herdr-dividers`는 화면(클라이언트)만 바꾼 것이고, 셸과 에이전트는 공식 Herdr **서버**가 관리합니다. 그래서 이 도구에 문제가 생겨도 작업은 서버에 그대로 남아 있고, 공식 Herdr로 같은 세션에 다시 접속할 수 있습니다.
+
+### 순정 Herdr 실행 명령
+
+| 하고 싶은 일 | 명령 |
+| --- | --- |
+| **순정 Herdr 실행** (셸 함수·별칭을 거치지 않음) | `command herdr` |
+| 함수·별칭과 상관없이 공식 실행 파일 직접 실행 | `~/.local/bin/herdr` |
+| 서버가 살아 있는지 확인 | `command herdr status server` |
+| 서버 재시작 (저장된 세션 복원) | `command herdr server stop` 후 `command herdr` |
+
+`herdr` 명령을 셸 함수나 별칭으로 바꿔 둔 경우에는 `herdr`만 입력하면 수정본이 실행됩니다. 이때 앞에 `command`를 붙이면 함수와 별칭을 건너뛰고 공식 `herdr`가 실행됩니다. 셸 함수를 만들지 않았다면 `herdr`와 `command herdr`는 같은 명령입니다.
+
+### 화면이 이상하거나 작업이 비어 보일 때
+
+1. 열려 있는 수정본 화면을 닫습니다. 기본 설정에서는 `Ctrl+B` 다음 `q`입니다. 서버와 작업은 종료되지 않습니다.
+2. `command herdr status server`를 실행해 `status: running`인지 확인합니다.
+3. `command herdr`로 순정 화면에 접속해 작업 목록이 그대로 있는지 확인합니다. 구분선만 보이지 않을 뿐 스페이스·탭·에이전트는 유지됩니다.
+4. 서버가 응답하지 않을 때만 `command herdr server stop`을 실행한 뒤 `command herdr`를 다시 실행합니다. 마지막으로 저장된 스페이스·탭 구성이 복원되지만, **실행 중이던 명령과 에이전트 프로세스는 종료됩니다.**
+
+구분선 제목·소속·접기 상태는 `~/.local/state/herdr-dev/client-shell/`의 JSON에 따로 저장됩니다. 순정 Herdr를 실행하거나 서버를 재시작해도 이 파일은 지워지지 않으므로, 수정본으로 돌아오면 구분선이 복원됩니다.
+
+### 재부팅 직후 첫 실행
+
+재부팅하면 서버 프로세스는 사라지고 소켓 파일만 남을 수 있습니다. `herdr-dividers`는 소켓 파일이 아니라 서버의 실제 응답으로 상태를 확인합니다. 응답이 없으면 공식 `herdr server`를 시작해 저장된 세션을 복원한 뒤 접속합니다. 공식 `herdr`를 찾지 못하면 위 안내대로 `command herdr`를 먼저 실행하라는 메시지를 표시하고 멈춥니다.
 
 ## 검증 내용을 공개합니다
 
@@ -98,7 +126,7 @@ Homebrew 설치는 이미 검증한 파일을 가져오는 방식이며, 사용�
 소스 빌드는 Rust 1.96.1과 rustfmt, Zig 0.16.0, Python 3.11 이상과 tar 추출 필터, macOS 개발 도구, patch·curl이 필요합니다.
 
 ```sh
-git clone https://github.com/KangUnMo/herdr-space-dividers.git
+git clone https://github.com/mozzi-papa/herdr-space-dividers.git
 cd herdr-space-dividers
 sh update-custom.sh 0.9.5
 sh run.sh
@@ -124,4 +152,4 @@ python3 -m unittest discover -s tools -p 'test_*.py' -v
 
 ## English
 
-Unofficial Herdr workspace dividers for Apple Silicon macOS. Register the tap and install with `brew tap kangunmo/tap && brew install kangunmo/tap/herdr-space-dividers`, then run `herdr-dividers` outside Herdr. Use `brew upgrade kangunmo/tap/herdr-space-dividers` for updates after installation. No Rust, Zig or Python is required for the prebuilt package. It attaches to your existing default local Herdr server without replacing the official command. Package 0.1.0 targets Herdr 0.9.5. Independent tools/docs are MIT; the patch is Apache-2.0. Third-party notices are bundled. Not affiliated with Herdr, not Developer ID signed/notarized, and not a guarantee of future compatibility.
+Unofficial Herdr workspace dividers for Apple Silicon macOS. Register the tap and install with `brew tap mozzi-papa/tap && brew install mozzi-papa/tap/herdr-space-dividers`, then run `herdr-dividers` outside Herdr. Use `brew upgrade mozzi-papa/tap/herdr-space-dividers` for updates after installation. No Rust, Zig or Python is required for the prebuilt package. It attaches to your existing default local Herdr server without replacing the official command; if the server is not responding (for example right after a reboot) it starts the official `herdr server` first. If anything goes wrong, run the stock Herdr with `command herdr` (it bypasses any shell function or alias); your sessions stay on the server. Package 0.1.1 targets Herdr 0.9.5. Independent tools/docs are MIT; the patch is Apache-2.0. Third-party notices are bundled. Not affiliated with Herdr, not Developer ID signed/notarized, and not a guarantee of future compatibility.

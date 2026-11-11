@@ -7,6 +7,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tarfile
 import tempfile
@@ -115,6 +116,66 @@ class ReleaseTests(unittest.TestCase):
         binary.unlink()
         result = subprocess.run([str(alias), "--version"], env=environment, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
+
+    def _launcher_area(self, with_official):
+        """가짜 HOME에 배포 구조·가짜 클라이언트·(선택) 가짜 공식 herdr를 만든다."""
+        home = self.area / "home"
+        root = self.area / "app"
+        for directory in ("bin", "libexec", "share/herdr-space-dividers"):
+            (root / directory).mkdir(parents=True)
+        (home / ".config/herdr").mkdir(parents=True)
+        shutil.copy2(build_release.BASE / "bin/herdr-dividers", root / "bin/herdr-dividers")
+        (root / "share/herdr-space-dividers/VERSION").write_text("0.1.0\n")
+        client = root / "libexec/herdr-client"
+        client.write_text('#!/bin/sh\nif [ "$1" = --version ]; then echo "herdr 0.9.5"; exit 0; fi\n'
+                          'echo "$HERDR_CONFIG_PATH" > "$HOME/client.ran"\n')
+        client.chmod(0o755)
+        # 재부팅 직후처럼 서버는 없고 소켓 파일(-S 통과)만 남은 상태. 경로 길이 제한 때문에 상대 경로로 바인드한다.
+        previous = os.getcwd()
+        os.chdir(home / ".config/herdr")
+        try:
+            with socket.socket(socket.AF_UNIX) as stale:
+                stale.bind("herdr.sock")
+        finally:
+            os.chdir(previous)
+        self.assertTrue((home / ".config/herdr/herdr.sock").is_socket())
+        if with_official:
+            (home / ".local/bin").mkdir(parents=True)
+            official = home / ".local/bin/herdr"
+            official.write_text(
+                '#!/bin/sh\nstate="$HOME/server.state"\n'
+                'if [ "$1 $2" = "status server" ]; then\n'
+                '  if [ -f "$state" ]; then echo "status: running"; else echo "status: stopped"; fi\n'
+                'elif [ "$1" = server ]; then\n'
+                '  echo started >> "$HOME/server.starts"; echo $$ > "$HOME/server.pid"; : > "$state"; sleep 20\n'
+                'fi\n')
+            official.chmod(0o755)
+
+            def stop_fake_server():
+                pid_file = home / "server.pid"
+                if pid_file.exists():
+                    subprocess.run(["kill", pid_file.read_text().strip()], capture_output=True)
+            self.addCleanup(stop_fake_server)
+        environment = {"HOME": str(home), "PATH": "/usr/bin:/bin"}
+        return home, root / "bin/herdr-dividers", environment
+
+    def test_launcher_starts_official_server_when_only_stale_socket_remains(self):
+        home, launcher, environment = self._launcher_area(with_official=True)
+        result = subprocess.run([str(launcher)], env=environment, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((home / "server.starts").read_text().split(), ["started"])
+        self.assertEqual((home / "client.ran").read_text().strip(), str(home / ".config/herdr/config.toml"))
+        # 이미 서버가 응답하면 다시 시작하지 않는다.
+        result = subprocess.run([str(launcher)], env=environment, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((home / "server.starts").read_text().split(), ["started"])
+
+    def test_launcher_explains_vanilla_herdr_when_official_binary_is_missing(self):
+        home, launcher, environment = self._launcher_area(with_official=False)
+        result = subprocess.run([str(launcher)], env=environment, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("command herdr", result.stderr)
+        self.assertFalse((home / "client.ran").exists())
 
     def test_release_profile_is_used_for_tests_and_build(self):
         zig = self.area / "zig"

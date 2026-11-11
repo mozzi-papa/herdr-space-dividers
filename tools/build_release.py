@@ -96,8 +96,8 @@ def formula_text(version, sha256):
 # Copyright (c) 2026 KangUnMo
 class HerdrSpaceDividers < Formula
   desc "Workspace dividers and grouping for Herdr (unofficial client)"
-  homepage "https://github.com/KangUnMo/herdr-space-dividers"
-  url "https://github.com/KangUnMo/herdr-space-dividers/releases/download/v{version}/herdr-space-dividers-v{version}-macos-arm64.tar.gz"
+  homepage "https://github.com/mozzi-papa/herdr-space-dividers"
+  url "https://github.com/mozzi-papa/herdr-space-dividers/releases/download/v{version}/herdr-space-dividers-v{version}-macos-arm64.tar.gz"
   version "{version}"
   sha256 "{sha256}"
   license all_of: ["MIT", "Apache-2.0"]
