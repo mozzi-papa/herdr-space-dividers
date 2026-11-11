@@ -4,7 +4,7 @@
 
 Herdr의 `spaces`에 구분선·분류·접기·드래그를 더하는 비공식 클라이언트입니다.
 
-**Apple Silicon · Herdr 0.9.5 · 패키지 0.1.1 · 도구 MIT / 패치 Apache-2.0**
+**Apple Silicon · Herdr 0.9.5 · 패키지 0.1.2 · 도구 MIT / 패치 Apache-2.0**
 
 ![업무와 개인 분류로 정리한 Herdr 작업 공간의 구성 예시](assets/overview.svg)
 
@@ -152,4 +152,4 @@ python3 -m unittest discover -s tools -p 'test_*.py' -v
 
 ## English
 
-Unofficial Herdr workspace dividers for Apple Silicon macOS. Register the tap and install with `brew tap mozzi-papa/tap && brew install mozzi-papa/tap/herdr-space-dividers`, then run `herdr-dividers` outside Herdr. Use `brew upgrade mozzi-papa/tap/herdr-space-dividers` for updates after installation. No Rust, Zig or Python is required for the prebuilt package. It attaches to your existing default local Herdr server without replacing the official command; if the server is not responding (for example right after a reboot) it starts the official `herdr server` first. If anything goes wrong, run the stock Herdr with `command herdr` (it bypasses any shell function or alias); your sessions stay on the server. Package 0.1.1 targets Herdr 0.9.5. Independent tools/docs are MIT; the patch is Apache-2.0. Third-party notices are bundled. Not affiliated with Herdr, not Developer ID signed/notarized, and not a guarantee of future compatibility.
+Unofficial Herdr workspace dividers for Apple Silicon macOS. Register the tap and install with `brew tap mozzi-papa/tap && brew install mozzi-papa/tap/herdr-space-dividers`, then run `herdr-dividers` outside Herdr. Use `brew upgrade mozzi-papa/tap/herdr-space-dividers` for updates after installation. No Rust, Zig or Python is required for the prebuilt package. It attaches to your existing default local Herdr server without replacing the official command; if the server is not responding (for example right after a reboot) it starts the official `herdr server` first. If anything goes wrong, run the stock Herdr with `command herdr` (it bypasses any shell function or alias); your sessions stay on the server. Package 0.1.2 targets Herdr 0.9.5. Independent tools/docs are MIT; the patch is Apache-2.0. Third-party notices are bundled. Not affiliated with Herdr, not Developer ID signed/notarized, and not a guarantee of future compatibility.

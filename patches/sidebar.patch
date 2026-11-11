@@ -108,7 +108,7 @@
      }
  }
  
-@@ -191,7 +212,54 @@
+@@ -191,7 +212,55 @@
              outcome.repaint = true;
              return;
          };
@@ -152,9 +152,10 @@
 +                    }
 +                }
 +                ClientContextMenuAction::Close if index < self.dividers.len() => {
-+                    let order = self.checkpoint_dividers();
++                    self.checkpoint_dividers();
++                    // 삭제한 분류의 스페이스는 미분류로 돌아가고 다른 분류의 소속은 유지합니다.
 +                    self.dividers.remove(index);
-+                    self.assign_divider_members(&order);
++                    self.sync_divider_positions();
 +                    self.persist_chrome_preferences(outcome);
 +                }
 +                ClientContextMenuAction::UndoDivider => self.undo_divider_edit(outcome),
@@ -163,7 +164,7 @@
              ClientContextMenuTarget::Workspace {
                  workspace_id,
                  close_group,
-@@ -229,6 +297,35 @@
+@@ -229,6 +298,35 @@
          use crate::input::KeybindAction;
  
          match action {
@@ -201,7 +202,7 @@
                      .snapshot
 --- /dev/null
 +++ b/src/client/shell/divider_groups.rs
-@@ -0,0 +1,244 @@
+@@ -0,0 +1,266 @@
 +// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
 +use super::*;
@@ -341,6 +342,27 @@
 +        if !self.active_endpoint_id.is_local() || self.hits.divider_rows.is_empty() {
 +            return;
 +        }
++        // 마지막 행 아래 빈 공간에 놓으면 미분류로 해제합니다.
++        // 스크롤 등으로 목록이 일부만 보이면 빈 공간을 확신할 수 없어 적용하지 않습니다.
++        let list_bottom = self
++            .hits
++            .workspaces
++            .iter()
++            .map(|hit| hit.rect.bottom())
++            .chain(self.hits.divider_rows.iter().map(|(rect, _)| rect.bottom()))
++            .max()
++            .unwrap_or(0);
++        let list_complete = self.snapshot.as_deref().is_some_and(|snapshot| {
++            let empty = HashSet::new();
++            let entries = render::workspace_entries(
++                snapshot,
++                self.collapsed_groups_for_endpoint(&self.active_endpoint_id)
++                    .unwrap_or(&empty),
++            );
++            rows(snapshot, &entries, &self.dividers, false).len()
++                == self.hits.workspaces.len() + self.hits.divider_rows.len()
++        });
++        let on_blank = list_complete && row >= list_bottom;
 +        let target = self
 +            .hits
 +            .divider_rows
@@ -359,7 +381,8 @@
 +            }))
 +            .filter(|(y, _)| *y <= row)
 +            .max_by_key(|(y, _)| *y)
-+            .and_then(|(_, owner)| owner);
++            .and_then(|(_, owner)| owner)
++            .filter(|_| !on_blank);
 +        let current = self.dividers.iter().position(|divider| {
 +            divider
 +                .members
@@ -744,7 +767,7 @@
      }
  
      pub(super) fn open_new_workspace_overlay(&mut self) {
-@@ -936,6 +959,52 @@
+@@ -936,6 +959,72 @@
          };
          let trimmed = rename.input.trim();
          let method = match rename.target {
@@ -783,12 +806,32 @@
 +                    .collect();
 +                if !title.is_empty() && self.dividers.len() < 32 {
 +                    let order = self.checkpoint_dividers();
-+                    self.dividers.push(SidebarDivider {
-+                        position,
-+                        title,
-+                        ..Default::default()
-+                    });
-+                    self.assign_divider_members(&order);
++                    // 새 구분선은 빈 분류로 만들고 기존 소속은 다시 자르지 않습니다.
++                    // 선택한 스페이스가 속한 분류 바로 다음에 놓습니다(없으면 맨 위).
++                    self.dividers.sort_by_key(|divider| divider.position);
++                    let owner = position
++                        .checked_sub(1)
++                        .and_then(|index| order.get(index))
++                        .and_then(|id| {
++                            self.dividers.iter().position(|divider| {
++                                divider.members.as_ref().is_some_and(|m| m.contains(id))
++                            })
++                        });
++                    let at = owner.map_or(0, |index| index + 1);
++                    let next_position = self
++                        .dividers
++                        .get(at)
++                        .map_or(order.len(), |divider| divider.position);
++                    self.dividers.insert(
++                        at,
++                        SidebarDivider {
++                            position: next_position,
++                            title,
++                            members: Some(Vec::new()),
++                            ..Default::default()
++                        },
++                    );
++                    self.sync_divider_positions();
 +                    self.persist_chrome_preferences(outcome);
 +                    self.reveal_focused_workspace = false;
 +                }
@@ -1342,7 +1385,7 @@
  use super::*;
  
  #[test]
-@@ -525,5 +527,841 @@
+@@ -525,5 +527,967 @@
          &request.method,
          crate::api::schema::Method::WorkspaceClose(params)
              if params.workspace_id == "ws_1" && !params.close_group
@@ -1377,7 +1420,7 @@
 +            target: ClientRenameTarget::NewDivider { position: 1 },
 +            ..
 +        }))
-     ));
++    ));
 +    state.handle_input_bytes("업무".as_bytes());
 +    let submit = state.handle_input_bytes(b"\r");
 +    assert!(
@@ -1385,6 +1428,10 @@
 +        "구분선은 서버 API를 호출하지 않습니다."
 +    );
 +    assert_eq!(state.dividers.len(), 1);
++    assert_eq!(state.dividers[0].members.as_deref(), Some(&[][..]));
++    // 새 구분선은 비어 있습니다. 스페이스 이동은 드래그로 하므로 그 결과 상태를 직접 만듭니다.
++    state.dividers[0].members = Some(vec!["ws_2".to_owned()]);
++    state.sync_divider_positions();
 +    let frame = state.compose(120, 40).unwrap();
 +    // 전각 문자의 후속 셀을 건너뛰어 화면의 실제 문자열을 복원합니다.
 +    let mut text = String::new();
@@ -1637,7 +1684,7 @@
 +    let path = std::env::temp_dir().join(format!(
 +        "herdr-divider-persistence-{}.json",
 +        std::process::id()
-+    ));
+     ));
 +    preferences::store(
 +        &path,
 +        preferences::ClientChromePreferences {
@@ -1769,7 +1816,7 @@
 +        "저장 실패 시 화면의 구분선은 유지합니다."
 +    );
 +    std::fs::remove_dir(directory).unwrap();
- }
++}
 +
 +fn divider_groups_state() -> ClientShellState {
 +    let config: Config = toml::from_str("[keys]\nswitch_workspace = 'cmd+1..9'\n").unwrap();
@@ -1826,6 +1873,72 @@
 +        ids,
 +        ["ws_new", "ws_2", "ws_3"],
 +        "새 공간은 미분류에 두고 기존 소속은 보존합니다."
++    );
+ }
++
++#[test]
++fn divider_creation_keeps_existing_members_even_at_the_same_position() {
++    let mut state = divider_groups_state();
++    let work = state.dividers[0].members.clone();
++    let personal = state.dividers[1].members.clone();
++    for title in ["A", "B", "C"] {
++        state.open_new_divider_overlay();
++        state.handle_input_bytes(format!("{title}\r").as_bytes());
++    }
++    let titles = state
++        .dividers
++        .iter()
++        .map(|divider| divider.title.as_str())
++        .collect::<Vec<_>>();
++    // 같은 스페이스를 선택한 채 만들어도 기존 분류의 소속은 그대로입니다.
++    assert_eq!(titles, ["Work", "C", "B", "A", "Personal"]);
++    assert_eq!(state.dividers[0].members, work);
++    assert_eq!(state.dividers[4].members, personal);
++    assert!(state.dividers[1..4]
++        .iter()
++        .all(|divider| divider.members.as_deref() == Some(&[][..])));
++    state.compose(120, 40).unwrap();
++    let ids = state
++        .hits
++        .workspaces
++        .iter()
++        .map(|hit| hit.workspace_id.as_str())
++        .collect::<Vec<_>>();
++    assert_eq!(ids, ["ws_1", "ws_2", "ws_3"]);
++    // 되돌리면 한 번에 하나씩 사라지고 소속은 유지됩니다.
++    state.undo_divider_edit(&mut ClientShellInput::default());
++    assert_eq!(state.dividers.len(), 4);
++    assert_eq!(state.dividers[0].members, work);
++}
++
++#[test]
++fn divider_delete_releases_only_its_members_to_ungrouped() {
++    let mut state = divider_groups_state();
++    let work = state.dividers[0].members.clone();
++    state.overlay = Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
++        target: ClientContextMenuTarget::Divider { index: 1 },
++        x: 0,
++        y: 0,
++        highlighted: 1,
++    }));
++    state.activate_context_menu_item(1, &mut ClientShellInput::default());
++    // 삭제한 Personal의 ws_3은 Work로 흡수되지 않고 미분류가 됩니다.
++    assert_eq!(state.dividers.len(), 1);
++    assert_eq!(state.dividers[0].members, work);
++    state.compose(120, 40).unwrap();
++    let ids = state
++        .hits
++        .workspaces
++        .iter()
++        .map(|hit| hit.workspace_id.as_str())
++        .collect::<Vec<_>>();
++    assert_eq!(ids, ["ws_3", "ws_1", "ws_2"]);
++    // 되돌리면 소속이 원래대로 돌아옵니다.
++    state.undo_divider_edit(&mut ClientShellInput::default());
++    assert_eq!(state.dividers.len(), 2);
++    assert_eq!(
++        state.dividers[1].members.as_deref(),
++        Some(&["ws_3".to_owned()][..])
 +    );
 +}
 +
@@ -2094,6 +2207,62 @@
 +    let outcome = divider_mvp_mouse(&mut state, MouseEventKind::Up(MouseButton::Left), 90, 35);
 +    assert!(outcome.actions.is_empty());
 +    assert_eq!(state.dividers, changed);
++}
++
++#[test]
++fn divider_drop_below_the_list_releases_to_ungrouped_but_last_row_keeps_group() {
++    let mut state = divider_groups_state();
++    state.compose(120, 40).unwrap();
++    let drag = |state: &mut ClientShellState, from: (u16, u16), to: (u16, u16)| {
++        divider_mvp_mouse(
++            state,
++            MouseEventKind::Down(MouseButton::Left),
++            from.0,
++            from.1,
++        );
++        divider_mvp_mouse(state, MouseEventKind::Drag(MouseButton::Left), to.0, to.1);
++        divider_mvp_mouse(state, MouseEventKind::Up(MouseButton::Left), to.0, to.1);
++    };
++    let last = state.hits.workspaces[2].rect;
++    let first = state.hits.workspaces[0].rect;
++    // 마지막 행 위에 놓으면 그 분류로 들어갑니다.
++    drag(&mut state, (first.x + 3, first.y), (last.x + 3, last.y));
++    assert!(state.dividers[1]
++        .members
++        .as_ref()
++        .unwrap()
++        .contains(&"ws_1".into()));
++    // 목록 아래 빈 공간에 놓으면 미분류가 됩니다.
++    state.compose(120, 40).unwrap();
++    let last = state.hits.workspaces.last().unwrap().rect;
++    let source = state
++        .hits
++        .workspaces
++        .iter()
++        .find(|hit| hit.workspace_id == "ws_3")
++        .unwrap()
++        .rect;
++    drag(
++        &mut state,
++        (source.x + 3, source.y),
++        (last.x + 3, last.bottom() + 1),
++    );
++    assert!(state.dividers.iter().all(|divider| !divider
++        .members
++        .as_ref()
++        .unwrap()
++        .contains(&"ws_3".into())));
++    // 이미 미분류인 스페이스를 아래 빈 공간에 놓아도 소속은 변하지 않습니다.
++    let after = state.dividers.clone();
++    state.compose(120, 40).unwrap();
++    let last = state.hits.workspaces.last().unwrap().rect;
++    let source = state.hits.workspaces[0].rect;
++    drag(
++        &mut state,
++        (source.x + 3, source.y),
++        (last.x + 3, last.bottom() + 1),
++    );
++    assert_eq!(state.dividers.len(), after.len());
 +}
 +
 +#[test]
