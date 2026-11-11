@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 KangUnMo
+# Copyright (c) 2026 mozzi-papa
 """검증을 통과한 Herdr 수정본만 선택하고 이전 실행 파일을 보존합니다."""
 
 import argparse

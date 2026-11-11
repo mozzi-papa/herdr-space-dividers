@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2026 KangUnMo
+# Copyright (c) 2026 mozzi-papa
 """배포 고지·압축 파일·전용 실행기의 동작을 확인합니다."""
 
 import json

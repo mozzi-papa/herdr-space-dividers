@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-# Herdr v0.9.5 sidebar modifications by KangUnMo, 2026.
+# Herdr v0.9.5 sidebar modifications by mozzi-papa, 2026.
 --- a/src/client/shell.rs
 +++ b/src/client/shell.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use std::collections::{HashMap, HashSet, VecDeque};
  
@@ -19,7 +19,7 @@
 --- a/src/client/shell/composition.rs
 +++ b/src/client/shell/composition.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  
@@ -51,7 +51,7 @@
 --- a/src/client/shell/config.rs
 +++ b/src/client/shell/config.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  
@@ -67,7 +67,7 @@
 --- a/src/client/shell/context_menu.rs
 +++ b/src/client/shell/context_menu.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  
@@ -166,7 +166,7 @@
 --- /dev/null
 +++ b/src/client/shell/divider_groups.rs
 @@ -0,0 +1,244 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
 +use super::*;
 +
@@ -413,7 +413,7 @@
 --- a/src/client/shell/global_menu.rs
 +++ b/src/client/shell/global_menu.rs
 @@ -1,9 +1,12 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  
@@ -444,7 +444,7 @@
 --- a/src/client/shell/mouse.rs
 +++ b/src/client/shell/mouse.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -674,7 +674,7 @@
 --- a/src/client/shell/overlay_input.rs
 +++ b/src/client/shell/overlay_input.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  
@@ -751,7 +751,7 @@
 --- a/src/client/shell/preferences.rs
 +++ b/src/client/shell/preferences.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use std::{
      path::{Path, PathBuf},
@@ -855,7 +855,7 @@
 --- a/src/client/shell/render.rs
 +++ b/src/client/shell/render.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  
@@ -871,7 +871,7 @@
 --- a/src/client/shell/sidebar.rs
 +++ b/src/client/shell/sidebar.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  use ratatui::{
@@ -1029,7 +1029,7 @@
 --- a/src/client/shell/state.rs
 +++ b/src/client/shell/state.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  
@@ -1245,7 +1245,7 @@
 --- a/src/client/shell/tests/chrome_context.rs
 +++ b/src/client/shell/tests/chrome_context.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  
@@ -2038,7 +2038,7 @@
 --- a/src/client/shell_runtime.rs
 +++ b/src/client/shell_runtime.rs
 @@ -1,3 +1,5 @@
-+// Modified for Herdr Space Dividers by KangUnMo, 2026.
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
  
