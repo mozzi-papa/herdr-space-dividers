@@ -65,6 +65,11 @@ with tempfile.TemporaryDirectory(prefix='herdr-div-mvp-') as temp:
                 column += 0 if unicodedata.combining(token) else (2 if unicodedata.east_asian_width(token) in 'WF' else 1)
         assert found is not None, character
         return found
+    def drag_space_into(title):
+        # 구분선이 있으면 맨 위 `미분류` 헤더 바로 아래 행이 첫 미분류 스페이스입니다.
+        space, target = sidebar_title_row('미') + 1, sidebar_title_row(title)
+        os.write(master, f'\x1b[<0;6;{space}M\x1b[<32;6;{target}M\x1b[<0;6;{target}m'.encode())
+        drain(.3)
     def click(button, row):
         os.write(master, f'\x1b[<{button};6;{row}M\x1b[<{button};6;{row}m'.encode())
     def saved_preferences():
@@ -92,10 +97,8 @@ with tempfile.TemporaryDirectory(prefix='herdr-div-mvp-') as temp:
         drain(.8)
         assert '업'.encode() in output and '무'.encode() in output
         assert saved_preferences()['dividers'] == [{'position': 1, 'title': '업무', 'members': [], 'collapsed': False}]
-        # 실제 출력된 제목 행을 읽어 클릭 좌표를 결정합니다.
-        row = sidebar_title_row('업')
-        os.write(master, f'\x1b[<0;6;{row}M\x1b[<32;6;3M\x1b[<0;6;3m'.encode())
-        drain(.3)
+        # 실제 출력된 행을 읽어 좌표를 정하고, 미분류 스페이스를 구분선 제목에 끌어 넣습니다.
+        drag_space_into('업')
         assert saved_preferences()['dividers'][0]['position'] == 0
         assert saved_preferences()['dividers'][0]['members'] == [before['focused_workspace_id']]
         click(0, sidebar_title_row('업'))
@@ -133,9 +136,7 @@ with tempfile.TemporaryDirectory(prefix='herdr-div-mvp-') as temp:
         assert len(preference_files) == 1, preference_files
         saved = json.loads(preference_files[0].read_text())
         assert saved['dividers'] == [{'position': 1, 'title': '복원', 'members': [], 'collapsed': False}], saved
-        row = sidebar_title_row('복')
-        os.write(master, f'\x1b[<0;6;{row}M\x1b[<32;6;3M\x1b[<0;6;3m'.encode())
-        drain(.3)
+        drag_space_into('복')
         assert saved_preferences()['dividers'][0]['members'] == [before['focused_workspace_id']]
         click(0, sidebar_title_row('복'))
         drain(.3)

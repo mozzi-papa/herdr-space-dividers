@@ -1,6 +1,6 @@
 {
   "base_version": "0.9.5",
-  "patch_sha256": "d5034af691d0c6cb3db21b31c50599e01177682c45e17f98128a777eb4dc096e",
+  "patch_sha256": "feaf4d34c923681b8c8c385c84adb13729c156bbf8b970d563fd37a9f012330a",
   "files": [
     "src/client/shell.rs",
     "src/client/shell/composition.rs",
@@ -26,10 +26,21 @@
     "divider_creation_keeps_existing_members_even_at_the_same_position",
     "divider_delete_releases_only_its_members_to_ungrouped",
     "divider_drop_below_the_list_releases_to_ungrouped_but_last_row_keeps_group",
+    "divider_drag_below_a_collapsed_last_group_moves_to_the_bottom",
+    "empty_dividers_sharing_a_position_can_swap_order",
     "divider_groups_workspace_drag_changes_membership_and_cancels_outside_drop",
     "divider_groups_numeric_jump_reveals_space_below_collapsed_overflow",
     "workspace_folder_actions_are_distinct_from_divider_editing",
-    "preferences_build_mode_keeps_legacy_state_directory"
+    "divider_drag_moves_whole_group_top_middle_bottom_without_changing_members",
+    "empty_and_member_groups_reorder_even_when_positions_tie",
+    "divider_drag_onto_ungrouped_header_keeps_ungrouped_first",
+    "ungrouped_header_appears_only_with_dividers_and_ignores_input",
+    "workspace_drop_on_ungrouped_header_releases_and_on_group_moves",
+    "legacy_position_json_migrates_once_and_then_keeps_vector_order",
+    "mixed_legacy_and_member_dividers_migrate_without_duplicates",
+    "preferences_build_mode_keeps_legacy_state_directory",
+    "workspace_drag_over_a_divider_header_keeps_its_title_and_color",
+    "legacy_migration_waits_until_the_server_reports_spaces"
   ],
   "license": "Apache-2.0"
 }
