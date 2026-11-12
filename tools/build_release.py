@@ -109,7 +109,8 @@ class HerdrSpaceDividers < Formula
   end
 
   def install
-    bin.install "bin/herdr-dividers"
+    bin.install "bin/herdr-div"
+    bin.install_symlink "herdr-div" => "herdr-dividers"
     libexec.install "libexec/herdr-client"
     (share/"herdr-space-dividers").install Dir["share/herdr-space-dividers/*"]
   end
@@ -117,13 +118,14 @@ class HerdrSpaceDividers < Formula
   def caveats
     <<~EOS
       An existing default local Herdr server is required.
-      Run: herdr-dividers
+      Run: herdr-div  (herdr-dividers also works)
       The official herdr command and your running server are unchanged.
     EOS
   end
 
   test do
-    assert_match "herdr-dividers #{{version}}", shell_output("#{{bin}}/herdr-dividers --version")
+    assert_match "herdr-div #{{version}}", shell_output("#{{bin}}/herdr-div --version")
+    assert_match "herdr-div #{{version}}", shell_output("#{{bin}}/herdr-dividers --version")
   end
 end
 '''
@@ -173,7 +175,7 @@ def package_release(source, binary, version, upstream, manifest, archive, work, 
     (payload / "libexec").mkdir()
     share = payload / "share/herdr-space-dividers"
     share.mkdir(parents=True)
-    shutil.copy2(BASE / "bin/herdr-dividers", payload / "bin/herdr-dividers")
+    shutil.copy2(BASE / "bin/herdr-div", payload / "bin/herdr-div")
     shipped_binary = payload / "libexec/herdr-client"
     shutil.copy2(binary, shipped_binary)
     updater.run(["strip", "-x", str(shipped_binary)], log=log)

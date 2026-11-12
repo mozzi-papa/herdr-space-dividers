@@ -4,7 +4,7 @@
 
 ```sh
 brew upgrade mozzi-papa/tap/herdr-space-dividers
-herdr-dividers --version
+herdr-div --version
 ```
 
 검증한 패키지 릴리스를 설치합니다. 패키지 버전과 기반 Herdr 버전은 구분합니다. 구분 설정은 기존 JSON 경로를 유지합니다. 설치된 명령을 제거하려면 `brew uninstall herdr-space-dividers`를 사용하며, 설정 JSON을 자동 삭제하지 않습니다.

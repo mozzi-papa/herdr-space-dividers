@@ -50,7 +50,10 @@ if ! server_running; then
     done
 fi
 # 실행 중인 서버와의 호환성은 선택된 Herdr 클라이언트가 확인합니다.
+# 화면의 버전 표시와 업데이트 확인에 쓰는 값입니다. 읽지 못하면 빈 값이라 해당 기능만 꺼집니다.
+dividers_version=$(cat "$base_dir/VERSION" 2>/dev/null || true)
 exec env -u HERDR_CLIENT_SOCKET_PATH \
     HERDR_CONFIG_PATH="$HOME/.config/herdr/config.toml" \
     HERDR_SOCKET_PATH="$api_socket" \
+    HERDR_DIVIDERS_VERSION="$dividers_version" \
     "$binary"
