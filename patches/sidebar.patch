@@ -8,14 +8,23 @@
  use std::collections::{HashMap, HashSet, VecDeque};
  
  mod actions;
-@@ -10,6 +12,7 @@
+@@ -10,6 +12,8 @@
  mod config;
  mod context_menu;
  mod copy_mode;
 +mod divider_groups;
++mod dividers_update;
  mod endpoint_agent_state;
  mod endpoint_agents;
  mod endpoint_navigation;
+@@ -39,6 +43,7 @@
+ use text_editor::TextEditor;
+ use word_selection::ClientWordSelection;
+ 
++pub(crate) use dividers_update::start_update_checks;
+ pub(in crate::client::shell) use render::sidebar;
+ pub(crate) use state::*;
+ #[cfg(test)]
 
 --- a/src/client/shell/composition.rs
 +++ b/src/client/shell/composition.rs
@@ -567,7 +576,7 @@
 
 --- a/src/client/shell/global_menu.rs
 +++ b/src/client/shell/global_menu.rs
-@@ -1,9 +1,12 @@
+@@ -1,38 +1,60 @@
 +// Modified for Herdr Space Dividers by mozzi-papa, 2026.
 +// Based on Herdr v0.9.5; distributed under Apache-2.0.
  use super::*;
@@ -577,22 +586,117 @@
      Binding(crate::input::KeybindAction),
      WhatsNew,
 +    UndoDivider,
++    DividersCheck,
++    DividersCopyUpdate,
++    DividersOpenRelease,
++    DividersNoop,
  }
  
++impl From<super::dividers_update::DividersMenuAction> for ClientGlobalMenuAction {
++    fn from(action: super::dividers_update::DividersMenuAction) -> Self {
++        use super::dividers_update::DividersMenuAction as Action;
++        match action {
++            Action::Check => Self::DividersCheck,
++            Action::CopyUpdate => Self::DividersCopyUpdate,
++            Action::OpenRelease => Self::DividersOpenRelease,
++            Action::Noop => Self::DividersNoop,
++        }
++    }
++}
++
  pub(super) fn global_menu_attention(snapshot: &ClientShellSnapshot) -> bool {
-@@ -50,6 +53,7 @@
-         "detach",
+-    snapshot.update_available.is_some() || snapshot.integration_updates_available
++    snapshot.update_available.is_some()
++        || snapshot.integration_updates_available
++        || super::dividers_update::update_available()
+ }
+ 
+ pub(super) fn global_menu_item_has_badge(
+     snapshot: &ClientShellSnapshot,
+     action: ClientGlobalMenuAction,
+ ) -> bool {
+-    (action == ClientGlobalMenuAction::WhatsNew && snapshot.update_available.is_some())
++    action == ClientGlobalMenuAction::DividersCopyUpdate
++        || (action == ClientGlobalMenuAction::WhatsNew && snapshot.update_available.is_some())
+         || (action == ClientGlobalMenuAction::Binding(crate::input::KeybindAction::Settings)
+             && snapshot.integration_updates_available)
+ }
+ 
+ pub(super) fn global_menu_items(
+     snapshot: &ClientShellSnapshot,
+-) -> Vec<(&'static str, ClientGlobalMenuAction)> {
+-    let mut items = vec![
++) -> Vec<(String, ClientGlobalMenuAction)> {
++    let mut items: Vec<(String, ClientGlobalMenuAction)> = vec![
+         (
+-            "settings",
++            "settings".to_owned(),
+             ClientGlobalMenuAction::Binding(crate::input::KeybindAction::Settings),
+         ),
+         (
+-            "keybinds",
++            "keybinds".to_owned(),
+             ClientGlobalMenuAction::Binding(crate::input::KeybindAction::Help),
+         ),
+         (
+-            "reload config",
++            "reload config".to_owned(),
+             ClientGlobalMenuAction::Binding(crate::input::KeybindAction::ReloadConfig),
+         ),
+     ];
+@@ -42,18 +64,32 @@
+                 "update ready"
+             } else {
+                 "what's new"
+-            },
++            }
++            .to_owned(),
+             ClientGlobalMenuAction::WhatsNew,
+         ));
+     }
+     items.push((
+-        "detach",
++        "detach".to_owned(),
          ClientGlobalMenuAction::Binding(crate::input::KeybindAction::Detach),
      ));
-+    items.push(("구분선 복구", ClientGlobalMenuAction::UndoDivider));
++    items.push((
++        "구분선 복구".to_owned(),
++        ClientGlobalMenuAction::UndoDivider,
++    ));
++    items.extend(
++        super::dividers_update::menu_rows()
++            .into_iter()
++            .map(|(label, action)| (label, action.into())),
++    );
      items
  }
  
-@@ -104,6 +108,7 @@
+ impl ClientShellState {
++    pub(crate) fn tick_dividers_update(&mut self) -> bool {
++        super::dividers_update::take_changed()
++    }
++
+     pub(super) fn toggle_global_menu(&mut self) {
+         if matches!(self.overlay, Some(ClientShellOverlay::GlobalMenu(_))) {
+             self.overlay = None;
+@@ -104,6 +140,20 @@
                  self.record_binding(crate::input::KeybindMatch::Action(binding), outcome)
              }
              ClientGlobalMenuAction::WhatsNew => self.open_release_notes(),
 +            ClientGlobalMenuAction::UndoDivider => self.undo_divider_edit(outcome),
++            ClientGlobalMenuAction::DividersCheck => super::dividers_update::check_now(),
++            ClientGlobalMenuAction::DividersCopyUpdate => {
++                outcome.actions.push(ClientShellAction::ClipboardWrite(
++                    super::dividers_update::UPGRADE_COMMAND.as_bytes().to_vec(),
++                ));
++                super::dividers_update::mark_copied();
++            }
++            ClientGlobalMenuAction::DividersOpenRelease => {
++                if let Some(url) = super::dividers_update::release_url() {
++                    outcome.actions.push(ClientShellAction::OpenSafeWebUrl(url));
++                }
++            }
++            ClientGlobalMenuAction::DividersNoop => {}
          }
          outcome.repaint = true;
      }
@@ -1458,10 +1562,11 @@
  use super::*;
  
  #[test]
-@@ -526,4 +528,1553 @@
+@@ -525,5 +527,1598 @@
+         &request.method,
          crate::api::schema::Method::WorkspaceClose(params)
              if params.workspace_id == "ws_1" && !params.close_group
-     ));
++    ));
 +}
 +
 +// 전각 문자의 후속 셀을 건너뛰어 화면의 실제 문자열을 복원합니다.
@@ -1480,7 +1585,7 @@
 +        text.push('\n');
 +    }
 +    text
- }
++}
 +
 +#[test]
 +fn divider_mvp_creates_only_a_visual_row_and_preserves_number_navigation() {
@@ -1701,7 +1806,7 @@
 +            target: ClientContextMenuTarget::Divider { index: 0 },
 +            ..
 +        }))
-+    ));
+     ));
 +    let mut outcome = ClientShellInput::default();
 +    state.activate_context_menu_item(0, &mut outcome);
 +    assert!(outcome.actions.is_empty());
@@ -1728,7 +1833,7 @@
 +        frame.cells[(first.y * frame.width + first.x + 1) as usize].symbol,
 +        " "
 +    );
-+}
+ }
 +
 +#[test]
 +fn divider_mvp_drop_outside_sidebar_cancels_and_empty_rename_keeps_title() {
@@ -2183,6 +2288,50 @@
 +    );
 +    assert_eq!(divider_color(&Some("bad".into())), None);
 +    assert_eq!(divider_color(&None), None);
++}
++
++#[test]
++fn divider_color_is_saved_to_the_state_file_and_restored() {
++    let path =
++        std::env::temp_dir().join(format!("herdr-divider-color-{}.json", std::process::id()));
++    let _ = std::fs::remove_file(&path);
++    let build = || {
++        let config =
++            ClientShellConfig::from_config(&Config::default()).with_preferences_path(path.clone());
++        let mut state = ClientShellState::new(config);
++        let mut projected = snapshot();
++        for i in 2..=3 {
++            let mut workspace = projected.workspaces[0].clone();
++            workspace.workspace_id = format!("ws_{i}");
++            workspace.focused = false;
++            projected.workspaces.push(workspace);
++        }
++        state.set_snapshot(Box::new(projected));
++        state.set_pane_surface(surface());
++        state
++    };
++    let mut state = build();
++    state.dividers.push(SidebarDivider {
++        title: "Color".into(),
++        members: Some(vec!["ws_1".into()]),
++        ..Default::default()
++    });
++    let mut outcome = ClientShellInput::default();
++    state.overlay = Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
++        target: ClientContextMenuTarget::DividerColor { index: 0 },
++        x: 1,
++        y: 1,
++        highlighted: 0,
++    }));
++    state.activate_context_menu_item(6, &mut outcome);
++    assert_eq!(state.dividers[0].color.as_deref(), Some("#5c8dff"));
++    let saved: serde_json::Value =
++        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
++    assert_eq!(saved["dividers"][0]["color"], "#5c8dff");
++    // 다른 변경(접기)으로 다시 저장해도, 새로 실행해도 색이 남습니다.
++    state.toggle_divider(0, &mut outcome);
++    assert_eq!(build().dividers[0].color.as_deref(), Some("#5c8dff"));
++    let _ = std::fs::remove_file(&path);
 +}
 +
 +#[test]
@@ -3048,3 +3197,400 @@
              }
              shell::ClientShellAction::OpenSafeWebUrl(url) => {
                  if crate::app::actions::safe_web_url(&url).is_some() {
+
+--- a/src/client/mod.rs
++++ b/src/client/mod.rs
+@@ -530,6 +530,13 @@
+ 
+     // Channel for events from the resize and server reader threads.
+     let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<ClientLoopEvent>(256);
++    if state.shell.is_some() {
++        // 화면 버전 표시와 업데이트 확인은 Herdr Space Dividers 실행기가 버전을 넘긴 때만 켜집니다.
++        let wake = event_tx.clone();
++        shell::start_update_checks(move || {
++            let _ = wake.try_send(ClientLoopEvent::Timer);
++        });
++    }
+     let (supervisor_tx, mut supervisor_rx) =
+         tokio::sync::mpsc::channel::<endpoint::EndpointSupervisorEvent>(64);
+     // Keep Windows console draining independent of server-frame backpressure.
+@@ -2325,7 +2332,8 @@
+                         outcome.repaint |= notification_repaint
+                             | shell.tick_copy_feedback(now)
+                             | shell.tick_workspace_highlight(now)
+-                            | shell.tick_endpoint_error(now);
++                            | shell.tick_endpoint_error(now)
++                            | shell.tick_dividers_update();
+                         let frame = outcome
+                             .repaint
+                             .then(|| shell.compose(state.reported_size.0, state.reported_size.1))
+
+--- /dev/null
++++ b/src/client/shell/dividers_update.rs
+@@ -0,0 +1,366 @@
++// Modified for Herdr Space Dividers by mozzi-papa, 2026.
++// Based on Herdr v0.9.5; distributed under Apache-2.0.
++//! Herdr Space Dividers의 버전 표시와 업데이트 확인입니다. 공식 Herdr의 업데이트와는 별개입니다.
++//!
++//! 최신 버전 번호만 GitHub에서 조회하며 사용자 정보는 보내지 않습니다. 자동 설치는 하지 않고
++//! Homebrew 업데이트 명령을 안내합니다. `HERDR_DIVIDERS_NO_UPDATE_CHECK=1`이면 자동 확인을 끕니다.
++use std::sync::atomic::{AtomicBool, Ordering};
++use std::sync::{Mutex, MutexGuard, OnceLock};
++use std::time::Duration;
++
++const RELEASE_API: &str =
++    "https://api.github.com/repos/mozzi-papa/herdr-space-dividers/releases/latest";
++const RELEASE_PAGE_PREFIX: &str = "https://github.com/mozzi-papa/herdr-space-dividers/releases/";
++pub(super) const UPGRADE_COMMAND: &str = "brew upgrade mozzi-papa/tap/herdr-space-dividers";
++const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
++
++#[derive(Clone, Debug, PartialEq, Eq)]
++pub(super) struct DividersRelease {
++    pub(super) version: String,
++    pub(super) url: String,
++}
++
++#[derive(Clone, Debug, Default, PartialEq, Eq)]
++pub(super) enum DividersUpdateStatus {
++    /// 아직 결과가 없거나 자동 확인에서 새 버전이 없었습니다.
++    #[default]
++    Idle,
++    Checking,
++    UpToDate,
++    Available(DividersRelease),
++    Failed,
++}
++
++#[derive(Clone, Debug, Default)]
++pub(super) struct DividersState {
++    /// 실행기가 알려 준 현재 버전입니다. 없으면 이 기능 전체가 숨겨집니다.
++    pub(super) version: Option<String>,
++    pub(super) status: DividersUpdateStatus,
++    /// 사용자가 직접 확인했을 때만 "최신 버전" · "확인 실패" 결과를 보여 줍니다.
++    pub(super) manual: bool,
++    pub(super) copied: bool,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(super) enum DividersMenuAction {
++    Check,
++    CopyUpdate,
++    OpenRelease,
++    Noop,
++}
++
++// 프로세스에 하나뿐인 업데이트 상태입니다. 확인 스레드와 화면이 함께 읽습니다.
++static STATE: Mutex<DividersState> = Mutex::new(DividersState {
++    version: None,
++    status: DividersUpdateStatus::Idle,
++    manual: false,
++    copied: false,
++});
++
++// 결과가 나오면 화면 루프를 깨워 다시 그리게 합니다. 안 그러면 다음 화면 갱신까지 알림이 늦습니다.
++static WAKE: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
++static CHANGED: AtomicBool = AtomicBool::new(false);
++
++fn notify() {
++    CHANGED.store(true, Ordering::SeqCst);
++    if let Some(wake) = WAKE.get() {
++        wake();
++    }
++}
++
++/// 화면 루프가 호출합니다. 결과가 바뀌었으면 한 번 true를 돌려줍니다.
++pub(super) fn take_changed() -> bool {
++    CHANGED.swap(false, Ordering::SeqCst)
++}
++
++fn state() -> MutexGuard<'static, DividersState> {
++    STATE.lock().unwrap_or_else(|error| error.into_inner())
++}
++
++/// `0.1.3` 또는 `v0.1.3` 형식만 받습니다. 시험판 꼬리표나 잘못된 값은 거부합니다.
++pub(super) fn parse_version(value: &str) -> Option<(u64, u64, u64)> {
++    let mut parts = value.strip_prefix('v').unwrap_or(value).split('.');
++    let mut next = || {
++        let part = parts.next()?;
++        (!part.is_empty() && part.len() <= 9 && part.bytes().all(|b| b.is_ascii_digit()))
++            .then(|| part.parse().ok())
++            .flatten()
++    };
++    let version = (next()?, next()?, next()?);
++    parts.next().is_none().then_some(version)
++}
++
++pub(super) fn is_newer(candidate: &str, current: &str) -> bool {
++    matches!((parse_version(candidate), parse_version(current)), (Some(c), Some(v)) if c > v)
++}
++
++/// GitHub `releases/latest` 응답에서 정식 릴리스만 읽습니다.
++pub(super) fn parse_latest_release(body: &[u8]) -> Result<DividersRelease, String> {
++    let value: serde_json::Value =
++        serde_json::from_slice(body).map_err(|error| format!("응답을 읽지 못했습니다: {error}"))?;
++    if value["draft"].as_bool() == Some(true) || value["prerelease"].as_bool() == Some(true) {
++        return Err("정식 릴리스가 아닙니다.".into());
++    }
++    let tag = value["tag_name"].as_str().unwrap_or_default();
++    parse_version(tag).ok_or("버전 태그 형식이 올바르지 않습니다.")?;
++    let url = value["html_url"].as_str().unwrap_or_default();
++    // 응답에서 온 주소는 이 저장소의 릴리스 페이지일 때만 엽니다.
++    if !url.starts_with(RELEASE_PAGE_PREFIX) {
++        return Err("릴리스 주소가 올바르지 않습니다.".into());
++    }
++    Ok(DividersRelease {
++        version: tag.strip_prefix('v').unwrap_or(tag).to_owned(),
++        url: url.to_owned(),
++    })
++}
++
++fn fetch_latest_release() -> Result<DividersRelease, String> {
++    let output = crate::noninteractive_process::curl_command()
++        .args([
++            "-sfL",
++            "--connect-timeout",
++            "5",
++            "--max-time",
++            "10",
++            "-H",
++            "Accept: application/vnd.github+json",
++            "-H",
++            "User-Agent: herdr-space-dividers",
++            RELEASE_API,
++        ])
++        .output()
++        .map_err(|error| format!("curl 실행 실패: {error}"))?;
++    if !output.status.success() {
++        return Err("최신 버전 정보를 가져오지 못했습니다.".into());
++    }
++    parse_latest_release(&output.stdout)
++}
++
++fn apply_result(state: &mut DividersState, current: &str, result: Result<DividersRelease, String>) {
++    match result {
++        Ok(release) if is_newer(&release.version, current) => {
++            if state.status != DividersUpdateStatus::Available(release.clone()) {
++                state.copied = false;
++            }
++            state.status = DividersUpdateStatus::Available(release);
++        }
++        Ok(_) => state.status = DividersUpdateStatus::UpToDate,
++        // 이미 알게 된 새 버전은 일시적인 네트워크 실패로 지우지 않습니다.
++        Err(_) if matches!(state.status, DividersUpdateStatus::Available(_)) => {}
++        Err(_) => state.status = DividersUpdateStatus::Failed,
++    }
++}
++
++fn finish_check(current: &str, result: Result<DividersRelease, String>) {
++    apply_result(&mut state(), current, result);
++    notify();
++}
++
++/// 실행기가 넘긴 버전을 읽고, 켜져 있으면 6시간마다 업데이트를 확인하는 스레드를 시작합니다.
++pub(crate) fn start_update_checks(wake: impl Fn() + Send + Sync + 'static) {
++    let Some(version) = std::env::var("HERDR_DIVIDERS_VERSION")
++        .ok()
++        .filter(|value| parse_version(value).is_some())
++    else {
++        return;
++    };
++    state().version = Some(version.clone());
++    let _ = WAKE.set(Box::new(wake));
++    if std::env::var("HERDR_DIVIDERS_NO_UPDATE_CHECK").is_ok_and(|value| value == "1") {
++        return;
++    }
++    std::thread::spawn(move || loop {
++        state().manual = false;
++        finish_check(&version, fetch_latest_release());
++        std::thread::sleep(CHECK_INTERVAL);
++    });
++}
++
++/// 메뉴에서 직접 확인합니다. 이미 확인 중이면 새로 시작하지 않습니다.
++pub(super) fn check_now() {
++    let version = {
++        let mut state = state();
++        let Some(version) = state.version.clone() else {
++            return;
++        };
++        if state.status == DividersUpdateStatus::Checking {
++            return;
++        }
++        state.manual = true;
++        if !matches!(state.status, DividersUpdateStatus::Available(_)) {
++            state.status = DividersUpdateStatus::Checking;
++        }
++        version
++    };
++    notify();
++    std::thread::spawn(move || finish_check(&version, fetch_latest_release()));
++}
++
++pub(super) fn update_available() -> bool {
++    matches!(state().status, DividersUpdateStatus::Available(_))
++}
++
++pub(super) fn release_url() -> Option<String> {
++    match &state().status {
++        DividersUpdateStatus::Available(release) => Some(release.url.clone()),
++        _ => None,
++    }
++}
++
++pub(super) fn mark_copied() {
++    state().copied = true;
++}
++
++pub(super) fn menu_rows() -> Vec<(String, DividersMenuAction)> {
++    build_menu_rows(&state())
++}
++
++pub(super) fn build_menu_rows(state: &DividersState) -> Vec<(String, DividersMenuAction)> {
++    use DividersMenuAction as Action;
++    let Some(version) = state.version.as_deref() else {
++        return Vec::new();
++    };
++    let mut rows = vec![(format!("Herdr Space Dividers {version}"), Action::Check)];
++    match &state.status {
++        DividersUpdateStatus::Idle => {}
++        DividersUpdateStatus::Checking => rows.push(("  확인 중…".into(), Action::Noop)),
++        DividersUpdateStatus::UpToDate if state.manual => {
++            rows.push(("  최신 버전입니다".into(), Action::Noop));
++        }
++        DividersUpdateStatus::Failed if state.manual => {
++            rows.push(("  확인 실패 · 네트워크 확인".into(), Action::Noop));
++        }
++        DividersUpdateStatus::UpToDate | DividersUpdateStatus::Failed => {}
++        DividersUpdateStatus::Available(release) => {
++            rows.push((
++                if state.copied {
++                    "  명령 복사됨 · 터미널에 붙여넣기".into()
++                } else {
++                    format!("  {} 업데이트 · 명령 복사", release.version)
++                },
++                Action::CopyUpdate,
++            ));
++            rows.push(("  릴리스 노트 열기".into(), Action::OpenRelease));
++        }
++    }
++    rows
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn state_with(status: DividersUpdateStatus) -> DividersState {
++        DividersState {
++            version: Some("0.1.2".into()),
++            status,
++            ..Default::default()
++        }
++    }
++
++    fn release(version: &str) -> DividersRelease {
++        DividersRelease {
++            version: version.into(),
++            url: format!("{RELEASE_PAGE_PREFIX}tag/v{version}"),
++        }
++    }
++
++    #[test]
++    fn dividers_update_versions_compare_numerically_and_reject_odd_tags() {
++        assert!(is_newer("0.1.10", "0.1.9"));
++        assert!(is_newer("v0.2.0", "0.1.12"));
++        assert!(!is_newer("0.1.2", "0.1.2"));
++        assert!(!is_newer("0.1.1", "0.1.2"));
++        for bad in [
++            "",
++            "0.1",
++            "0.1.2.3",
++            "0.1.2-rc1",
++            "latest",
++            "0..2",
++            "0.1.x",
++            "-0.1.2",
++        ] {
++            assert_eq!(parse_version(bad), None, "{bad}");
++            assert!(!is_newer(bad, "0.0.1"), "{bad}");
++        }
++        assert_eq!(parse_version("v10.20.30"), Some((10, 20, 30)));
++    }
++
++    #[test]
++    fn dividers_update_release_response_accepts_only_stable_releases_of_this_repo() {
++        let ok = br#"{"tag_name":"v0.1.3","html_url":"https://github.com/mozzi-papa/herdr-space-dividers/releases/tag/v0.1.3","draft":false,"prerelease":false,"body":"x"}"#;
++        assert_eq!(parse_latest_release(ok).unwrap(), release("0.1.3"));
++        for bad in [
++            &br#"{"tag_name":"v0.1.3","html_url":"https://github.com/mozzi-papa/herdr-space-dividers/releases/tag/v0.1.3","prerelease":true}"#[..],
++            br#"{"tag_name":"v0.1.3","html_url":"https://github.com/mozzi-papa/herdr-space-dividers/releases/tag/v0.1.3","draft":true}"#,
++            br#"{"tag_name":"nightly","html_url":"https://github.com/mozzi-papa/herdr-space-dividers/releases/tag/nightly"}"#,
++            br#"{"tag_name":"v0.1.3","html_url":"https://evil.example/releases/tag/v0.1.3"}"#,
++            br#"{"tag_name":"v0.1.3"}"#,
++            b"not json",
++            b"",
++        ] {
++            assert!(parse_latest_release(bad).is_err());
++        }
++    }
++
++    #[test]
++    fn dividers_update_menu_rows_follow_the_status() {
++        use DividersMenuAction as Action;
++        let rows = |state: &DividersState| build_menu_rows(state);
++        // 실행기가 버전을 주지 않으면 메뉴에 아무것도 더하지 않습니다.
++        assert!(rows(&DividersState::default()).is_empty());
++        let idle = rows(&state_with(DividersUpdateStatus::Idle));
++        assert_eq!(
++            idle,
++            [("Herdr Space Dividers 0.1.2".to_owned(), Action::Check)]
++        );
++        // 자동 확인의 "최신"·"실패"는 조용히 두고, 직접 확인했을 때만 보여 줍니다.
++        for status in [DividersUpdateStatus::UpToDate, DividersUpdateStatus::Failed] {
++            assert_eq!(rows(&state_with(status.clone())), idle);
++            let mut manual = state_with(status);
++            manual.manual = true;
++            assert_eq!(rows(&manual).len(), 2);
++        }
++        assert_eq!(
++            rows(&state_with(DividersUpdateStatus::Checking))[1].1,
++            Action::Noop
++        );
++        let mut available = state_with(DividersUpdateStatus::Available(release("0.1.3")));
++        let labels = rows(&available);
++        assert_eq!(
++            labels[1],
++            (
++                "  0.1.3 업데이트 · 명령 복사".to_owned(),
++                Action::CopyUpdate
++            )
++        );
++        assert_eq!(labels[2].1, Action::OpenRelease);
++        available.copied = true;
++        assert!(rows(&available)[1].0.contains("복사됨"));
++    }
++
++    #[test]
++    fn dividers_update_failure_keeps_a_known_new_version() {
++        let mut state = state_with(DividersUpdateStatus::Idle);
++        apply_result(&mut state, "0.1.2", Ok(release("0.1.3")));
++        assert_eq!(
++            state.status,
++            DividersUpdateStatus::Available(release("0.1.3"))
++        );
++        state.copied = true;
++        apply_result(&mut state, "0.1.2", Err("offline".into()));
++        assert_eq!(
++            state.status,
++            DividersUpdateStatus::Available(release("0.1.3"))
++        );
++        assert!(state.copied);
++        // 더 새 버전이 나오면 복사 표시를 지우고, 같은 버전이면 최신으로 돌아갑니다.
++        apply_result(&mut state, "0.1.2", Ok(release("0.1.4")));
++        assert!(!state.copied);
++        apply_result(&mut state, "0.1.4", Ok(release("0.1.4")));
++        assert_eq!(state.status, DividersUpdateStatus::UpToDate);
++        apply_result(&mut state, "0.1.4", Err("offline".into()));
++        assert_eq!(state.status, DividersUpdateStatus::Failed);
++    }
++}

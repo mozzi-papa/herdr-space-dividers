@@ -2,14 +2,14 @@
 
 ## 승인된 로컬 준비 범위
 
-목표는 Apple Silicon 사용자가 Rust·Zig·Python 없이 검증된 실행 파일을 Homebrew로 설치하도록 만드는 것입니다. 기존 `herdr` 명령과 사용자 서버는 유지하고 `herdr-dividers` 명령을 제공합니다. 소스 빌드 도구는 개발자용으로 남깁니다.
+목표는 Apple Silicon 사용자가 Rust·Zig·Python 없이 검증된 실행 파일을 Homebrew로 설치하도록 만드는 것입니다. 기존 `herdr` 명령과 사용자 서버는 유지하고 `herdr-div` 명령을 제공합니다. 소스 빌드 도구는 개발자용으로 남깁니다.
 
 클라이언트 설정은 디버그·릴리스 빌드 모두 기존 `herdr-dev/client-shell` JSON 경로를 사용합니다. 새로운 데이터베이스나 설정 마이그레이션을 도입하지 않습니다.
 
 ## 구성과 검증 순서
 
 - [x] `patches/`: 릴리스 빌드에서도 기존 설정 경로를 유지하고 필수 검증을 추가했습니다.
-- [x] `bin/herdr-dividers`: 별도 실행 명령과 도움말·버전 확인을 제공합니다.
+- [x] `bin/herdr-div`: 별도 실행 명령과 도움말·버전 확인을 제공합니다.
 - [x] `tools/build_release.py`: 공식 소스 패치·릴리스 테스트·빌드·개인 경로 제거·라이선스 수집·체크섬·배포 압축 파일을 생성합니다.
 - [x] `tools/test_release.py`: 실행기·라이선스 고지 수집·배포 파일 목록을 검사했습니다.
 - [x] `dist/herdr-space-dividers.rb`: 공개 URL과 SHA-256이 들어간 formula를 생성하고, 임시 tap에서 로컬 배포 파일의 설치를 확인했습니다.

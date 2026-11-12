@@ -4,7 +4,7 @@
 
 Herdr의 `spaces`에 구분선·분류·접기·드래그를 더하는 비공식 클라이언트입니다.
 
-**Apple Silicon · Herdr 0.9.5 · 패키지 0.1.2 · 도구 MIT / 패치 Apache-2.0**
+**Apple Silicon · Herdr 0.9.5 · 패키지 0.1.3 · 도구 MIT / 패치 Apache-2.0**
 
 ![업무와 개인 분류로 정리한 Herdr 작업 공간의 구성 예시](assets/overview.svg)
 
@@ -25,8 +25,10 @@ brew tap mozzi-papa/tap && brew install mozzi-papa/tap/herdr-space-dividers
 빌드된 실행 파일을 설치하므로 사용자에게 Rust·Zig·Python은 필요하지 않습니다.
 
 ```sh
-herdr-dividers
+herdr-div
 ```
+
+`herdr-dividers`도 같은 명령으로 계속 쓸 수 있습니다.
 
 이미 Herdr 안에 있다면 기본 설정의 `Ctrl+B`, `q`로 화면만 분리한 뒤 실행해 주세요. 기존 `herdr` 명령과 작업 서버는 그대로 유지합니다. 서버가 없다면 먼저 공식 `herdr`를 실행해 주세요.
 
@@ -64,15 +66,17 @@ brew upgrade mozzi-papa/tap/herdr-space-dividers
 ```
 
 ```sh
-herdr-dividers --version
-herdr-dividers --help
+herdr-div --version
+herdr-div --help
 ```
+
+화면 아래 `menu`에 현재 버전(`Herdr Space Dividers 0.1.3`)이 표시되고, 새 버전이 나오면 `menu` 옆에 점이 생기며 업데이트 명령을 복사할 수 있습니다. 확인은 실행할 때와 6시간마다 GitHub에서 최신 버전 번호만 조회하며 사용자 정보는 보내지 않습니다. 자동 설치는 하지 않습니다. 끄려면 `HERDR_DIVIDERS_NO_UPDATE_CHECK=1`로 실행해 주세요. 자세한 내용은 [사용법](docs/USAGE.md#버전-표시와-업데이트-알림)을 확인해 주세요.
 
 검증한 패키지 릴리스를 설치하는 방식입니다. 공식 Herdr가 업데이트되었다고 이 패치에 자동으로 병합되는 것은 아닙니다. 각 릴리스가 지원하는 Herdr 버전을 확인해 주세요. 기존 구분 설정은 디버그·릴리스 빌드 모두 같은 JSON 경로에서 읽습니다.
 
 ## 문제가 생겼을 때: 순정 Herdr로 실행
 
-`herdr-dividers`는 화면(클라이언트)만 바꾼 것이고, 셸과 에이전트는 공식 Herdr **서버**가 관리합니다. 그래서 이 도구에 문제가 생겨도 작업은 서버에 그대로 남아 있고, 공식 Herdr로 같은 세션에 다시 접속할 수 있습니다.
+`herdr-div`는 화면(클라이언트)만 바꾼 것이고, 셸과 에이전트는 공식 Herdr **서버**가 관리합니다. 그래서 이 도구에 문제가 생겨도 작업은 서버에 그대로 남아 있고, 공식 Herdr로 같은 세션에 다시 접속할 수 있습니다.
 
 ### 순정 Herdr 실행 명령
 
@@ -96,7 +100,7 @@ herdr-dividers --help
 
 ### 재부팅 직후 첫 실행
 
-재부팅하면 서버 프로세스는 사라지고 소켓 파일만 남을 수 있습니다. `herdr-dividers`는 소켓 파일이 아니라 서버의 실제 응답으로 상태를 확인합니다. 응답이 없으면 공식 `herdr server`를 시작해 저장된 세션을 복원한 뒤 접속합니다. 공식 `herdr`를 찾지 못하면 위 안내대로 `command herdr`를 먼저 실행하라는 메시지를 표시하고 멈춥니다.
+재부팅하면 서버 프로세스는 사라지고 소켓 파일만 남을 수 있습니다. `herdr-div`는 소켓 파일이 아니라 서버의 실제 응답으로 상태를 확인합니다. 응답이 없으면 공식 `herdr server`를 시작해 저장된 세션을 복원한 뒤 접속합니다. 공식 `herdr`를 찾지 못하면 위 안내대로 `command herdr`를 먼저 실행하라는 메시지를 표시하고 멈춥니다.
 
 ## 검증 내용을 공개합니다
 
@@ -152,4 +156,4 @@ python3 -m unittest discover -s tools -p 'test_*.py' -v
 
 ## English
 
-Unofficial Herdr workspace dividers for Apple Silicon macOS. Register the tap and install with `brew tap mozzi-papa/tap && brew install mozzi-papa/tap/herdr-space-dividers`, then run `herdr-dividers` outside Herdr. Use `brew upgrade mozzi-papa/tap/herdr-space-dividers` for updates after installation. No Rust, Zig or Python is required for the prebuilt package. It attaches to your existing default local Herdr server without replacing the official command; if the server is not responding (for example right after a reboot) it starts the official `herdr server` first. If anything goes wrong, run the stock Herdr with `command herdr` (it bypasses any shell function or alias); your sessions stay on the server. Package 0.1.2 targets Herdr 0.9.5. Independent tools/docs are MIT; the patch is Apache-2.0. Third-party notices are bundled. Not affiliated with Herdr, not Developer ID signed/notarized, and not a guarantee of future compatibility.
+Unofficial Herdr workspace dividers for Apple Silicon macOS. Register the tap and install with `brew tap mozzi-papa/tap && brew install mozzi-papa/tap/herdr-space-dividers`, then run `herdr-div` outside Herdr. Use `brew upgrade mozzi-papa/tap/herdr-space-dividers` for updates after installation. No Rust, Zig or Python is required for the prebuilt package. It attaches to your existing default local Herdr server without replacing the official command; if the server is not responding (for example right after a reboot) it starts the official `herdr server` first. If anything goes wrong, run the stock Herdr with `command herdr` (it bypasses any shell function or alias); your sessions stay on the server. Package 0.1.3 targets Herdr 0.9.5. Independent tools/docs are MIT; the patch is Apache-2.0. Third-party notices are bundled. Not affiliated with Herdr, not Developer ID signed/notarized, and not a guarantee of future compatibility.

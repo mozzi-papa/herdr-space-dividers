@@ -67,7 +67,7 @@ Apple Silicon M2 Max, macOS 26.3.1, Rust 1.96.1, Zig 0.16.0, Homebrew 7.0.11ì—ì
 
 ```sh
 python3 -m unittest discover -s tools -p 'test_*.py' -v
-sh -n bin/herdr-dividers
+sh -n bin/herdr-div
 python3 tools/build_release.py
 ```
 

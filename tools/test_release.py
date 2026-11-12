@@ -95,7 +95,7 @@ class ReleaseTests(unittest.TestCase):
         root = self.area / "app folder"
         for directory in ("bin", "libexec", "share/herdr-space-dividers"):
             (root / directory).mkdir(parents=True)
-        shutil.copy2(build_release.BASE / "bin/herdr-dividers", root / "bin/herdr-dividers")
+        shutil.copy2(build_release.BASE / "bin/herdr-div", root / "bin/herdr-div")
         (root / "share/herdr-space-dividers/VERSION").write_text("0.1.0\n")
         binary = root / "libexec/herdr-client"
         binary.write_text('#!/bin/sh\nif [ "$1" = --version ]; then echo "herdr 0.9.5"; else exit 99; fi\n')
@@ -103,11 +103,11 @@ class ReleaseTests(unittest.TestCase):
         links = self.area / "links"
         links.mkdir()
         alias = links / "herdr-dividers"
-        alias.symlink_to("../app folder/bin/herdr-dividers")
+        alias.symlink_to("../app folder/bin/herdr-div")
         environment = dict(os.environ, HERDR_ENV="1")
         result = subprocess.run([str(alias), "--version"], env=environment, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "herdr-dividers 0.1.0 (herdr 0.9.5)")
+        self.assertEqual(result.stdout.strip(), "herdr-div 0.1.0 (herdr 0.9.5)")
         result = subprocess.run([str(alias)], env=environment, capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
         self.assertIn("분리", result.stderr)
@@ -124,7 +124,7 @@ class ReleaseTests(unittest.TestCase):
         for directory in ("bin", "libexec", "share/herdr-space-dividers"):
             (root / directory).mkdir(parents=True)
         (home / ".config/herdr").mkdir(parents=True)
-        shutil.copy2(build_release.BASE / "bin/herdr-dividers", root / "bin/herdr-dividers")
+        shutil.copy2(build_release.BASE / "bin/herdr-div", root / "bin/herdr-div")
         (root / "share/herdr-space-dividers/VERSION").write_text("0.1.0\n")
         client = root / "libexec/herdr-client"
         client.write_text('#!/bin/sh\nif [ "$1" = --version ]; then echo "herdr 0.9.5"; exit 0; fi\n'
@@ -157,7 +157,7 @@ class ReleaseTests(unittest.TestCase):
                     subprocess.run(["kill", pid_file.read_text().strip()], capture_output=True)
             self.addCleanup(stop_fake_server)
         environment = {"HOME": str(home), "PATH": "/usr/bin:/bin"}
-        return home, root / "bin/herdr-dividers", environment
+        return home, root / "bin/herdr-div", environment
 
     def test_launcher_starts_official_server_when_only_stale_socket_remains(self):
         home, launcher, environment = self._launcher_area(with_official=True)

@@ -1,6 +1,6 @@
 {
   "base_version": "0.9.5",
-  "patch_sha256": "feaf4d34c923681b8c8c385c84adb13729c156bbf8b970d563fd37a9f012330a",
+  "patch_sha256": "9b24d133b3796fa3f8c63aeb85550fbc2f2b7154b3e224650015a802e6246034",
   "files": [
     "src/client/shell.rs",
     "src/client/shell/composition.rs",
@@ -15,7 +15,9 @@
     "src/client/shell/sidebar.rs",
     "src/client/shell/state.rs",
     "src/client/shell/tests/chrome_context.rs",
-    "src/client/shell_runtime.rs"
+    "src/client/shell_runtime.rs",
+    "src/client/mod.rs",
+    "src/client/shell/dividers_update.rs"
   ],
   "required_tests": [
     "divider_mvp_creates_only_a_visual_row_and_preserves_number_navigation",
@@ -40,7 +42,12 @@
     "mixed_legacy_and_member_dividers_migrate_without_duplicates",
     "preferences_build_mode_keeps_legacy_state_directory",
     "workspace_drag_over_a_divider_header_keeps_its_title_and_color",
-    "legacy_migration_waits_until_the_server_reports_spaces"
+    "legacy_migration_waits_until_the_server_reports_spaces",
+    "dividers_update_versions_compare_numerically_and_reject_odd_tags",
+    "dividers_update_release_response_accepts_only_stable_releases_of_this_repo",
+    "dividers_update_menu_rows_follow_the_status",
+    "dividers_update_failure_keeps_a_known_new_version",
+    "divider_color_is_saved_to_the_state_file_and_restored"
   ],
   "license": "Apache-2.0"
 }
