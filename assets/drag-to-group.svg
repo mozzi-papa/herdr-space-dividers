@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="520" viewBox="0 0 1080 520" role="img" aria-labelledby="title description">
+  <title id="title">스페이스를 분류로 드래그</title>
+  <desc id="description">미분류 스페이스를 개인 분류 제목으로 끌어 놓으면 놓을 자리의 제목 글자가 반전되어 표시되고, 놓은 뒤 개인 분류 아래로 소속이 옮겨지는 과정을 보여주는 설명용 화면입니다. 실제 사용자 데이터나 화면 캡처가 아닙니다.</desc>
+  <rect width="1080" height="520" rx="20" fill="#0f1724"/>
+  <rect x="1" y="1" width="1078" height="518" rx="19" fill="none" stroke="#334155"/>
+  <path d="M1 52H1079" stroke="#334155"/>
+  <g fill="#64748b"><circle cx="26" cy="26" r="6"/><circle cx="48" cy="26" r="6"/><circle cx="70" cy="26" r="6"/></g>
+  <text x="540" y="32" text-anchor="middle" fill="#cbd5e1" font-size="15" font-family="system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif">Herdr Space Dividers</text>
+  <path d="M540 53V519" stroke="#334155"/>
+  <g font-family="system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif" font-size="15">
+    <text x="24" y="498" fill="#e2e8f0" font-weight="700">① 세션을 끌어 분류 제목에 놓기</text>
+    <text x="564" y="498" fill="#e2e8f0" font-weight="700">② 분류 안으로 들어감</text>
+    <text x="526" y="498" text-anchor="end" fill="#64748b" font-size="12">놓을 자리는 제목 글자 반전으로 표시</text>
+  </g>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, 'Apple SD Gothic Neo', monospace" font-size="17">
+    <text x="24" y="88" fill="#94a3b8">spaces</text>
+    <text x="24" y="128" fill="#94a3b8" font-weight="700">미분류 · 1</text>
+    <line x1="128" y1="122" x2="330" y2="122" stroke="#94a3b8" stroke-opacity="0.55" stroke-width="2"/>
+    <text x="45" y="164" fill="#e2e8f0" opacity=".45">○ project-notes</text>
+    <text x="24" y="214" fill="#5b9cf6" font-weight="700">▼ 개발 · 3</text>
+    <line x1="138" y1="208" x2="330" y2="208" stroke="#5b9cf6" stroke-opacity="0.55" stroke-width="2"/>
+    <text x="45" y="250" fill="#e2e8f0">○ project-api</text>
+    <text x="45" y="286" fill="#e2e8f0">○ project-web</text>
+    <text x="45" y="322" fill="#e2e8f0">○ project-batch</text>
+    <rect x="18" y="355" width="114" height="26" rx="4" fill="#fdd835"/>
+    <text x="24" y="372" fill="#0f1724" font-weight="700">▼ 개인 · 2</text>
+    <line x1="138" y1="366" x2="330" y2="366" stroke="#fdd835" stroke-opacity="0.9" stroke-width="2"/>
+    <text x="45" y="408" fill="#e2e8f0">○ project-blog</text>
+    <text x="45" y="444" fill="#e2e8f0">○ project-docs</text>
+    <text x="564" y="88" fill="#94a3b8">spaces</text>
+    <text x="564" y="128" fill="#94a3b8" font-weight="700">미분류 · 0</text>
+    <line x1="668" y1="122" x2="870" y2="122" stroke="#94a3b8" stroke-opacity="0.55" stroke-width="2"/>
+    <text x="564" y="178" fill="#5b9cf6" font-weight="700">▼ 개발 · 3</text>
+    <line x1="678" y1="172" x2="870" y2="172" stroke="#5b9cf6" stroke-opacity="0.55" stroke-width="2"/>
+    <text x="585" y="214" fill="#e2e8f0">○ project-api</text>
+    <text x="585" y="250" fill="#e2e8f0">○ project-web</text>
+    <text x="585" y="286" fill="#e2e8f0">○ project-batch</text>
+    <text x="564" y="336" fill="#fdd835" font-weight="700">▼ 개인 · 3</text>
+    <line x1="678" y1="330" x2="870" y2="330" stroke="#fdd835" stroke-opacity="0.55" stroke-width="2"/>
+    <rect x="576" y="350" width="262" height="32" rx="5" fill="#1e334d"/><text x="585" y="372" fill="#f8fafc">● project-notes</text>
+    <text x="585" y="408" fill="#e2e8f0">○ project-blog</text>
+    <text x="585" y="444" fill="#e2e8f0">○ project-docs</text>
+  </g>
+  <g font-family="system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif" font-size="14">
+    <rect x="212" y="136" width="160" height="30" rx="6" fill="#1e334d" stroke="#5b9cf6" stroke-width="1.5"/>
+    <text x="226" y="156" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, 'Apple SD Gothic Neo', monospace" font-size="15">○ project-notes</text>
+    <path d="M360 168 C 400 230, 410 320, 346 362" stroke="#5b9cf6" stroke-width="2" stroke-dasharray="5 5" fill="none"/>
+    <path d="M356 366 L340 366 L348 352 Z" fill="#5b9cf6" transform="rotate(-20 346 362)"/>
+  </g>
+  <g transform="translate(520 230)"><circle cx="20" cy="0" r="20" fill="#0f1724" stroke="#334155"/><path d="M12 0H27M22 -6L28 0L22 6" stroke="#5b9cf6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+</svg>

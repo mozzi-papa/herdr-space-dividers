@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="500" viewBox="0 0 860 500" role="img" aria-labelledby="title description">
+  <title id="title">미분류 헤더와 색이 있는 분류 목록</title>
+  <desc id="description">목록 맨 위에 미분류 헤더가 고정되고, 그 아래에 접힌 분류와 펼쳐진 분류가 색별로 나뉘어 표시되는 설명용 화면입니다. 실제 사용자 데이터나 화면 캡처가 아닙니다.</desc>
+  <rect width="860" height="500" rx="20" fill="#0f1724"/>
+  <rect x="1" y="1" width="858" height="498" rx="19" fill="none" stroke="#334155"/>
+  <path d="M1 52H859" stroke="#334155"/>
+  <g fill="#64748b"><circle cx="26" cy="26" r="6"/><circle cx="48" cy="26" r="6"/><circle cx="70" cy="26" r="6"/></g>
+  <text x="430" y="32" text-anchor="middle" fill="#cbd5e1" font-size="15" font-family="system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif">Herdr Space Dividers</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, 'Apple SD Gothic Neo', monospace" font-size="17">
+    <text x="24" y="88" fill="#94a3b8">spaces</text>
+    <text x="24" y="128" fill="#94a3b8" font-weight="700">미분류 · 1</text>
+    <line x1="128" y1="122" x2="300" y2="122" stroke="#94a3b8" stroke-opacity="0.55" stroke-width="2"/>
+    <text x="45" y="164" fill="#e2e8f0">○ project-notes</text>
+    <text x="24" y="214" fill="#f0616d" font-weight="700">▶ 실험실 · 1</text>
+    <line x1="155" y1="208" x2="300" y2="208" stroke="#f0616d" stroke-opacity="0.55" stroke-width="2"/>
+    <text x="24" y="262" fill="#5b9cf6" font-weight="700">▼ 개발 · 3</text>
+    <line x1="138" y1="256" x2="300" y2="256" stroke="#5b9cf6" stroke-opacity="0.55" stroke-width="2"/>
+    <text x="45" y="298" fill="#e2e8f0">○ project-api</text>
+    <rect x="36" y="312" width="262" height="32" rx="5" fill="#1e334d"/><text x="45" y="334" fill="#f8fafc">● project-web</text>
+    <text x="45" y="370" fill="#e2e8f0">○ project-batch</text>
+    <text x="24" y="418" fill="#fdd835" font-weight="700">▶ 개인 · 2</text>
+    <line x1="138" y1="412" x2="300" y2="412" stroke="#fdd835" stroke-opacity="0.55" stroke-width="2"/>
+    <text x="24" y="454" fill="#5fb760" font-weight="700">▶ SSH · 1</text>
+    <line x1="135" y1="448" x2="300" y2="448" stroke="#5fb760" stroke-opacity="0.55" stroke-width="2"/>
+  </g>
+  <path d="M316 53V499" stroke="#334155"/>
+  <g font-family="system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif" font-size="16">
+    <g stroke="#64748b" stroke-width="1.5" fill="none">
+      <path d="M336 122H364"/><path d="M336 208H364"/><path d="M336 256H364"/><path d="M336 412H364"/>
+    </g>
+    <text x="376" y="120" fill="#e2e8f0" font-weight="700">미분류 헤더는 맨 위에 고정</text>
+    <text x="376" y="142" fill="#94a3b8" font-size="14">구분선이 있으면 항상 표시되고,</text>
+    <text x="376" y="162" fill="#94a3b8" font-size="14">어느 분류에도 없는 스페이스가 여기 모여요</text>
+    <text x="376" y="214" fill="#e2e8f0" font-weight="700">▶ 접힘</text>
+    <text x="376" y="262" fill="#e2e8f0" font-weight="700">▼ 펼침 · 제목을 누르면 전환</text>
+    <text x="376" y="418" fill="#e2e8f0" font-weight="700">분류마다 색을 지정</text>
+    <text x="376" y="440" fill="#94a3b8" font-size="14">우클릭 → 색상 변경</text>
+  </g>
+  <text x="836" y="482" text-anchor="end" fill="#64748b" font-family="system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif" font-size="12">설명용 가상 화면 · 실제 캡처 아님</text>
+</svg>
